@@ -59,8 +59,10 @@ layer_tunnel = pdk.Layer(
 r = pdk.Deck(
     layers=[layer_tunnel],
     initial_view_state=view_state,
-    map_style="mapbox://styles/mapbox/satellite-v9", # Vue satellite réaliste
+    # Utilisation du style satellite standard
+    map_style="mapbox://styles/mapbox/satellite-v9", 
     tooltip={"text": "{Section}\nAltitude: {altitude}m"}
+)
 )
 
 col1, col2 = st.columns([3, 1])
