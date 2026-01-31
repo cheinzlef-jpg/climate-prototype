@@ -1,80 +1,86 @@
 import streamlit as st
 import pandas as pd
-import folium
-from streamlit_folium import st_folium
+import pydeck as pdk
+import numpy as np
 
-st.set_page_config(page_title="The Climate Standards - Mont Blanc", layout="wide")
+st.set_page_config(page_title="The Climate Standards 3D - Mont Blanc", layout="wide")
 
-st.title("🛡️ Resilience Terminal: Tunnel du Mont-Blanc")
+st.title("🛰️ Terminal 3D de Résilience : Tunnel du Mont-Blanc")
 st.markdown("---")
 
-# --- SIDEBAR : CONTRÔLE DU RISQUE ---
-st.sidebar.header("🕹️ Simulation de Crue")
-flood_level = st.sidebar.slider("Niveau de crue torrentielle (m)", 0.0, 4.0, 0.5)
-scenario_year = st.sidebar.selectbox("Horizon", ["Actuel", "2050 (RCP 8.5)", "2100"])
+# --- INTERFACE DE CONTRÔLE ---
+st.sidebar.header("🕹️ Simulation Multi-Aléas")
+alea = st.sidebar.radio("Sélectionner l'aléa", ["Inondation", "Sécheresse", "Glissement de terrain"])
+intensite = st.sidebar.slider("Intensité de l'aléa (Niveau 1-5)", 1, 5, 2)
 
-# --- DONNÉES DES SECTIONS DU TUNNEL ---
-# Simulation de 5 sections critiques
-sections = {
-    'Section': ['Portail France', 'Section Géotechnique 1', 'Zone Centrale', 'Section Géotechnique 2', 'Portail Italie'],
-    'Lat': [45.902, 45.885, 45.860, 45.845, 45.832],
-    'Lon': [6.861, 6.900, 6.940, 6.980, 7.015],
-    'Seuil_Inondation_m': [1.5, 3.5, 4.0, 3.2, 1.2], # Niveau d'eau avant arrêt SCADA
-    'Importance': [1.0, 0.8, 0.9, 0.8, 1.0]
+# --- DONNÉES TECHNIQUES DES SECTIONS ---
+data = {
+    'Section': ['Portail France', 'Galerie Tech 1', 'Cœur du Massif', 'Galerie Tech 2', 'Portail Italie'],
+    'lat': [45.902, 45.885, 45.860, 45.845, 45.832],
+    'lon': [6.861, 6.900, 6.940, 6.980, 7.015],
+    'altitude': [1274, 1350, 1395, 1360, 1381], # Altitude réelle du tunnel
+    'vuln_inondation': [5, 2, 1, 2, 5],
+    'vuln_secheresse': [1, 2, 4, 2, 1], # Impact sur permafrost/fissures
+    'vuln_glissement': [4, 5, 2, 4, 3]
 }
-df = pd.DataFrame(sections)
+df = pd.DataFrame(data)
 
-# Logique de statut
-df['Statut'] = df['Seuil_Inondation_m'].apply(lambda x: "✅ OPÉRATIONNEL" if x > flood_level else "🚨 RUPTURE SCADA")
+# --- LOGIQUE DE RISQUE ---
+def calculate_risk(row, alea, intensite):
+    if alea == "Inondation": v = row['vuln_inondation']
+    elif alea == "Sécheresse": v = row['vuln_secheresse']
+    else: v = row['vuln_glissement']
+    
+    risk_score = v * intensite
+    if risk_score > 15: return [255, 0, 0, 200]    # Rouge (Critique)
+    if risk_score > 8: return [255, 165, 0, 200]  # Orange (Alerte)
+    return [0, 255, 100, 200]                    # Vert (Résilient)
 
-# --- INTERFACE PRINCIPALE ---
-col1, col2 = st.columns([2, 1])
+df['color'] = df.apply(lambda r: calculate_risk(r, alea, intensite), axis=1)
+
+# --- VISUALISATION 3D (PYDECK) ---
+# Simulation du relief (MNT) via l'inclinaison de la caméra
+view_state = pdk.ViewState(
+    latitude=45.86, longitude=6.94, zoom=11, pitch=45, bearing=30
+)
+
+layer_tunnel = pdk.Layer(
+    "ColumnLayer",
+    df,
+    get_position="[lon, lat]",
+    get_elevation="altitude",
+    elevation_scale=1,
+    radius=150,
+    get_fill_color="color",
+    pickable=True,
+    auto_highlight=True,
+)
+
+r = pdk.Deck(
+    layers=[layer_tunnel],
+    initial_view_state=view_state,
+    map_style="mapbox://styles/mapbox/satellite-v9", # Vue satellite réaliste
+    tooltip={"text": "{Section}\nAltitude: {altitude}m"}
+)
+
+col1, col2 = st.columns([3, 1])
 
 with col1:
-    st.subheader(f"📍 Carte de Vulnérabilité - {scenario_year}")
-    # Vue centrée sur le tunnel
-    m = folium.Map(location=[45.86, 6.94], zoom_start=12, tiles='CartoDB dark_matter')
-    
-    # Dessiner le tracé du tunnel (Ligne bleue)
-    folium.PolyLine(df[['Lat', 'Lon']].values, color="white", weight=5, opacity=0.5).add_to(m)
-
-    for _, row in df.iterrows():
-        color = "green" if "✅" in row['Statut'] else "red"
-        folium.Marker(
-            location=[row['Lat'], row['Lon']],
-            icon=folium.Icon(color=color, icon='info-sign'),
-            popup=f"{row['Section']} - Seuil: {row['Seuil_Inondation_m']}m"
-        ).add_to(m)
-    
-    st_folium(m, width=800, height=500)
+    st.pydeck_chart(r)
 
 with col2:
-    st.subheader("📊 État par Section")
-    st.dataframe(df[['Section', 'Statut']], hide_index=True)
+    st.subheader("📋 Analyse d'Impact")
+    st.write(f"**Aléa :** {alea}")
+    st.write(f"**Intensité :** {intensite}/5")
     
-    # Calcul score global
-    score = 100 - (len(df[df['Statut'] == "🚨 RUPTURE SCADA"]) / len(df) * 100)
-    st.metric("Indice de Résilience Global", f"{int(score)}%")
+    # Stratégies d'adaptation dynamiques
+    st.markdown("### 🛠️ Stratégies")
+    if alea == "Inondation":
+        st.info("- Batardeaux automatiques\n- Pompes d'exhaure haute capacité")
+    elif alea == "Sécheresse":
+        st.info("- Monitoring permafrost\n- Injection de coulis dans les fissures")
+    else:
+        st.info("- Pose de filets haute résistance\n- Capteurs de mouvement (Inclinomètres)")
 
-st.markdown("---")
-
-# --- SECTION STRATÉGIES D'ADAPTATION ---
-st.header("🛠️ Stratégies d'Adaptation (Préconisations)")
-
-if score < 100:
-    st.warning("Des vulnérabilités critiques ont été détectées. Voici les mesures correctives :")
-    
-    tab1, tab2, tab3 = st.tabs(["🏗️ Infrastructure", "🔌 SCADA / Élec", "🌊 Gestion des Eaux"])
-    
-    with tab1:
-        st.write("**Élévation des Portails :** Installer des barrières anti-crue amovibles aux entrées France et Italie (Seuils détectés < 2m).")
-        st.write("**Renforcement Géotechnique :** Injection de résine dans les zones de failles pour prévenir les infiltrations liées à la fonte du permafrost.")
-        
-    with tab2:
-        st.write("**Mise hors d'eau :** Surélever les armoires électriques et capteurs SCADA de 1.5m par rapport au niveau du sol actuel.")
-        st.write("**Redondance :** Déploiement de capteurs de pression IP68 (étanches) pour maintenir le monitoring en cas d'immersion partielle.")
-        
-    with tab3:
-        st.write("**Bassins de rétention :** Augmenter la capacité des pompes d'exhaure (évacuation des eaux) de 30% pour absorber les crues éclairs.")
-else:
-    st.success("L'infrastructure est résiliente pour ce niveau de crue. Monitoring standard activé.")
+# --- FOOTER TECHNIQUE ---
+st.caption("Données simulées sur MNT IGN 25m - Analyse de Niveau 3 (The Climate Standards)")
