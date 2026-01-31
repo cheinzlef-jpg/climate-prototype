@@ -55,14 +55,13 @@ layer_tunnel = pdk.Layer(
     pickable=True,
     auto_highlight=True,
 )
-mapbox_token = "COPIE_ICI_TON_TOKEN_PK_..."
-
 r = pdk.Deck(
     layers=[layer_tunnel],
     initial_view_state=view_state,
-    map_style="mapbox://styles/mapbox/satellite-v9",
-    api_keys={"mapbox": mapbox_token}, # <--- On force la clé ici
-    tooltip={"text": "{Section}\nAltitude: {altitude}m"}
+    # On utilise un style vide et on ajoute le fond satellite en fond
+    map_provider="carto", 
+    map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json", 
+    tooltip={"text": "{Section}"}
 )
 
 col1, col2 = st.columns([3, 1])
