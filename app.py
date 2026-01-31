@@ -55,14 +55,14 @@ layer_tunnel = pdk.Layer(
     pickable=True,
     auto_highlight=True,
 )
+mapbox_token = "COPIE_ICI_TON_TOKEN_PK_..."
 
 r = pdk.Deck(
     layers=[layer_tunnel],
     initial_view_state=view_state,
-    # Utilisation du style satellite standard
-    map_style="mapbox://styles/mapbox/satellite-v9", 
+    map_style="mapbox://styles/mapbox/satellite-v9",
+    api_keys={"mapbox": mapbox_token}, # <--- On force la clé ici
     tooltip={"text": "{Section}\nAltitude: {altitude}m"}
-
 )
 
 col1, col2 = st.columns([3, 1])
