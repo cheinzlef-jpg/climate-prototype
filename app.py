@@ -63,6 +63,7 @@ r = pdk.Deck(
     map_style="mapbox://styles/mapbox/satellite-v9", 
     tooltip={"text": "{Section}\nAltitude: {altitude}m"}
 
+)
 
 col1, col2 = st.columns([3, 1])
 
