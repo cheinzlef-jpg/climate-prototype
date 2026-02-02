@@ -99,26 +99,50 @@ with col_visu:
 with col_anal:
     st.markdown("### 📈 ANALYSE ÉCONOMIQUE")
     
-    # Hypothèses de calcul
-    cout_fermeture_jour = 1.2 # M€ (Pertes directes péages + indirectes locales)
-    cout_friction_jour = 0.4 # M€ (Coût des retards et logistique dégradée)
-    jours_impact = int(intensite * 45)
+    # Paramètres de calcul basés sur les données réelles du Tunnel du Mont-Blanc
+    flux_journalier = 5000  # Véhicules/jour (Poids lourds + Légers)
+    cout_retard_moyen = 120 # €/heure (Coût d'exploitation moyen transporteur)
+    perte_peage_jour = 0.8  # M€ (Recettes moyennes journalières)
     
-    total_impact = (jours_impact * cout_fermeture_jour * 0.2) + (jours_impact * cout_friction_jour * 0.8)
+    # Calculs dynamiques basés sur l'intensité de l'aléa
+    jours_impact = int(intensite * 45)
+    retard_moyen = intensite * 2.5 # Heures de retard générées par la congestion
+    
+    # Formule : Pertes = (Jours * Perte Péage * %Fermeture) + (Jours * Flux * Retard * Coût/h)
+    perte_directe = jours_impact * perte_peage_jour * (0.2 * intensite)
+    cout_friction = (jours_impact * flux_journalier * retard_moyen * cout_retard_moyen) / 1000000
+    total_impact = perte_directe + cout_friction
 
     st.markdown(f"""
     <div class="neon-panel">
         <p class="metric-title">Coût Annuel Estimé</p>
         <p class="metric-value">{round(total_impact, 1)} M€/an</p>
-        <p class="hypothese">Hypothèse : {jours_impact} jours de circulation dégradée par an.</p>
     </div>
     """, unsafe_allow_html=True)
     
-    st.write("**Détails du calcul :**")
-    st.caption(f"- Perte de péage : {round(jours_impact * 0.15, 2)} M€")
-    st.caption(f"- Surcoût logistique (Fret) : {round(jours_impact * 0.25, 2)} M€")
-    st.caption(f"- Externalités (CO2/Pollution) : +12%")
-
+    # --- ENCART D'INFORMATION CLIQUABLE (LES HYPOTHÈSES) ---
+    with st.expander("ℹ️ MÉTHODOLOGIE & HYPOTHÈSES"):
+        st.markdown(f"""
+        <div style="font-size: 0.85em; color: #aaaaaa; border-left: 2px solid #00f2ff; padding-left: 10px;">
+        
+        **1. Pertes Directes ($C_d$) :**<br>
+        Basées sur une perte de $20\%$ du CA journalier durant les {jours_impact} jours de criticité.
+        $$C_d = J_i \\times P_j \\times (0.2 \\times I)$$
+        
+        **2. Coût de Friction Logistique ($C_f$) :**<br>
+        Impact du ralentissement sur le fret transalpin. On estime que chaque unité de risque génère {round(retard_moyen, 1)}h de retard.
+        $$C_f = \\frac{J_i \\times Flux \\times R_m \\times C_h}{10^6}$$
+        
+        **3. Paramètres fixes :**
+        - Flux : {flux_journalier} véh/j.
+        - Coût horaire transport : {cout_retard_moyen} €/h.
+        - Valeur temps : Indexée sur le coût d'opportunité logistique.
+        </div>
+        """, unsafe_allow_html=True)
+        
+    st.write("**Répartition du risque :**")
+    st.progress(min(intensite, 1.0))
+    st.caption(f"Probabilité d'incident majeur : {round(intensite * 15, 1)}%")
 # --- STRATÉGIES (BAS) ---
 st.markdown("---")
 st.markdown("### 🛡️ RÉPONSES D'ADAPTATION")
