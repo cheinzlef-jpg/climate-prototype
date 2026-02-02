@@ -170,3 +170,66 @@ st.code(f"""
 // SECTEUR_IT: PRESSION HYDROSTATIQUE [VAL:{round(risk_score * 12, 2)} bar]
 // MAINTENANCE: PRÉVENTION NIVEAU {'4' if rcp == '8.5' else '2'} ACTIVÉE
 """, language="javascript")
+
+import pandas as pd
+
+# --- CALCUL DES COÛTS (Simulé basé sur le tunnel réel) ---
+# Un jour de fermeture = ~1.5M€ de pertes directes (péages + économie locale)
+perte_journaliere = 1.5 
+gravite = risk_score / 2  # Facteur basé sur votre curseur RCP/Année
+
+# --- SECTION ANALYSE DES IMPACTS ---
+st.markdown("---")
+st.subheader("📊 MATRICE D'IMPACT MULTI-CRITÈRES")
+
+tab1, tab2, tab3 = st.tabs(["📉 Impacts Économiques", "🏗️ Dégâts Matériels", "🌍 Impacts Sociaux & Politiques"])
+
+with tab1:
+    col_e1, col_e2, col_e3 = st.columns(3)
+    col_e1.metric("Court Terme (6 mois)", f"-{round(perte_journaliere * 15 * gravite, 1)} M€", "Fermetures ponctuelles")
+    col_e2.metric("Moyen Terme (2 ans)", f"-{round(perte_journaliere * 120 * gravite, 1)} M€", "Baisse du fret")
+    col_e3.metric("Long Terme (5 ans)", f"-{round(perte_journaliere * 400 * gravite, 1)} M€", "Rupture de chaîne")
+    st.caption("Pertes estimées incluant le manque à gagner des péages et l'inflation des coûts logistiques.")
+
+with tab2:
+    st.write("#### Diagnostic technique des infrastructures")
+    materiel_data = {
+        "Composant": ["Système Ventilation", "Dalle de roulement", "Structure de voûte", "Capteurs Sécurité"],
+        "État à 5 ans": ["Obsolescence thermique", "Fissuration hydrostatique", "Corrosion permafrost", "Saturation data"],
+        "Coût Remplacement": [f"{round(12*gravite)}M€", f"{round(8*gravite)}M€", f"{round(45*gravite)}M€", "2M€"]
+    }
+    st.table(pd.DataFrame(materiel_data))
+
+with tab3:
+    st.info("**Impact Politique :** Tension diplomatique FR-IT sur la gestion des flux de report (Fréjus).")
+    st.warning("**Impact Social :** Risque de dévitalisation des vallées de l'Arve et d'Aoste (isolement économique).")
+
+# --- ENCART STRATÉGIES D'ADAPTATION (BASÉ SUR LE RISQUE) ---
+st.markdown("### 🛡️ PLAN DE RÉSILIENCE & STRATÉGIES D'ADAPTATION")
+
+# Logique de recommandation dynamique
+if risk_score > 4:
+    color = "inverse"
+    strat_title = "🚨 STRATÉGIE DE CRISE (RÉSILIENCE LOURDE)"
+    actions = [
+        "**Génie Civil :** Création de galeries de drainage profond pour évacuer les pressions hydrostatiques.",
+        "**Technologie :** Installation d'un bouclier thermique actif et ventilation à débit variable haute performance.",
+        "**Économie :** Mise en place d'un fonds de secours européen pour la continuité du transit transalpin."
+    ]
+else:
+    strat_title = "✅ STRATÉGIE DE MAINTENANCE PRÉDICTIVE"
+    actions = [
+        "**Monitoring :** Déploiement de capteurs LiDAR et fibre optique pour surveillance millimétrée des parois.",
+        "**Gestion :** Modulation intelligente des tarifs de péage pour réduire la charge aux heures de pic thermique.",
+        "**Environnement :** Végétalisation des versants amont pour stabiliser les sols contre les glissements."
+    ]
+
+st.markdown(f"""
+<div style="border: 2px solid #ff4b4b; padding: 20px; border-radius: 10px; background: rgba(255, 75, 75, 0.05);">
+    <h3 style="color: #ff4b4b !important; margin-top:0;">{strat_title}</h3>
+    <ul>
+        <li>{"</li><li>".join(actions)}</li>
+    </ul>
+    <p style="text-align: right; font-weight: bold; color: #ff4b4b;">Ratio Coût-Avantage : 1:{round(4.5/gravite, 1)}</p>
+</div>
+""", unsafe_allow_html=True)
