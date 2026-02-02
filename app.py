@@ -2,8 +2,7 @@ import streamlit as st
 import numpy as np
 import streamlit.components.v1 as components
 
-# Configuration de la page
-st.set_page_config(layout="wide", page_title="Tunnel X-Ray Simulator v4")
+st.set_page_config(layout="wide", page_title="Mont-Blanc X-Ray Pro")
 
 # --- STYLE CSS HUD ---
 st.markdown("""
@@ -16,137 +15,132 @@ st.markdown("""
         padding: 15px;
         margin-bottom: 10px;
     }
-    .metric-value { font-size: 22px; font-weight: bold; color: #ff4b4b; }
-    .metric-title { font-size: 10px; text-transform: uppercase; opacity: 0.8; }
+    .strat-card {
+        border-left: 4px solid #ff4b4b;
+        background: rgba(255, 75, 75, 0.05);
+        padding: 10px;
+        margin-top: 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # --- HUB CONTROL (GAUCHE) ---
-col_ctrl, col_visu, col_anal = st.columns([0.8, 2, 1])
+col_ctrl, col_visu, col_anal = st.columns([0.8, 2, 1.2])
 
 with col_ctrl:
-    st.markdown("### 🎛️ HUB CONTROL")
+    st.markdown("### 🎛️ HUD CONTROLS")
     rcp = st.radio("SCÉNARIO RCP", ["2.6", "4.5", "8.5"], index=1)
     horizon = st.select_slider("HORIZON", options=[2024, 2050, 2100], value=2050)
     alea = st.selectbox("ALÉA À SIMULER", ["Inondations", "Glissement de terrain", "Sécheresse"])
     
-    # Calcul de l'intensité (0.1 à 1.0)
     h_idx = {2024: 0.2, 2050: 0.6, 2100: 1.0}[horizon]
     r_idx = {"2.6": 0.3, "4.5": 0.6, "8.5": 1.0}[rcp]
-    intensite_globale = h_idx * r_idx # Valeur entre 0.06 et 1.0
+    intensite = h_idx * r_idx
+    trafic_vitesse = max(0, 0.5 - (intensite * 0.5)) # Le trafic ralentit si le risque monte
 
-# --- VISUALISATION 3D (CENTRE) ---
+# --- VISUALISATION 3D PRO (CENTRE) ---
 with col_visu:
-    st.markdown(f"### 🔬 SCANNER : {alea.upper()} (IMPACT DYNAMIQUE)")
+    st.markdown(f"### 🔬 SIMULATION : {alea.upper()}")
     
-    # Logique JS : L'impact visuel dépend de intensite_globale
-    js_alea_logic = ""
-    
+    # Logique d'aléa pour JS
+    js_alea = ""
     if alea == "Inondations":
-        # La hauteur de l'eau monte ET s'étend sur plus de tronçons
-        hauteur = intensite_globale * 7
-        largeur = intensite_globale * 100
-        js_alea_logic = f"""
-            const waterGeo = new THREE.BoxGeometry({largeur}, {hauteur}, 12);
-            const waterMat = new THREE.MeshBasicMaterial({{ color: 0x0077ff, transparent: true, opacity: 0.6 }});
-            const water = new THREE.Mesh(waterGeo, waterMat);
-            water.position.y = -6 + ({hauteur}/2);
-            group.add(water);
-        """
+        js_alea = f"const h={intensite*7}; const w=new THREE.Mesh(new THREE.BoxGeometry({intensite*100},h,12), new THREE.MeshBasicMaterial({{color:0x0077ff,transparent:true,opacity:0.6}})); w.position.y=-6+h/2; group.add(w);"
     elif alea == "Glissement de terrain":
-        # Plus d'intensité = plus de rochers sur plus de tronçons
-        nb_rochers = int(intensite_globale * 40)
-        js_alea_logic = f"""
-            for(let i=0; i<{nb_rochers}; i++) {{
-                const rockGeo = new THREE.DodecahedronGeometry(Math.random()*1.5 + 0.5);
-                const rockMat = new THREE.MeshBasicMaterial({{ color: 0x888888, wireframe: true }});
-                const rock = new THREE.Mesh(rockGeo, rockMat);
-                // Les rochers s'étalent sur l'axe X selon l'intensité
-                rock.position.set(-50 + Math.random()*({intensite_globale}*80), -4 + Math.random()*3, Math.random()*6 - 3);
-                group.add(rock);
-            }}
-        """
+        js_alea = f"for(let i=0;i<{int(intensite*50)};i++){{const r=new THREE.Mesh(new THREE.DodecahedronGeometry(1), new THREE.MeshBasicMaterial({{color:0x888888,wireframe:true}})); r.position.set(-50+Math.random()*({intensite}*80),-4,Math.random()*6-3); group.add(r);}}"
     elif alea == "Sécheresse":
-        # Le noyau de chaleur devient plus large et plus opaque
-        opacite = min(intensite_globale, 0.9)
-        rayon = 1 + (intensite_globale * 4)
-        js_alea_logic = f"""
-            const heatGeo = new THREE.CylinderGeometry({rayon}, {rayon}, 100, 16);
-            const heatMat = new THREE.MeshBasicMaterial({{ color: 0xff3300, transparent: true, opacity: {opacite} }});
-            const heatCore = new THREE.Mesh(heatGeo, heatMat);
-            heatCore.rotation.z = Math.PI / 2;
-            group.add(heatCore);
-        """
+        js_alea = f"const s=new THREE.Mesh(new THREE.CylinderGeometry({1+intensite*4},{1+intensite*4},100,16), new THREE.MeshBasicMaterial({{color:0xff3300,transparent:true,opacity:{min(intensite,0.7)}}})); s.rotation.z=Math.PI/2; group.add(s);"
 
-    three_js_code = f"""
-    <div id="container-3d" style="width: 100%; height: 450px; border: 1px solid #00f2ff; background: #000;"></div>
+    three_js = f"""
+    <div id="c3d" style="width: 100%; height: 500px; border: 1px solid #00f2ff; background: #000; position:relative;">
+        <div style="position:absolute; top:10px; left:10px; color:#00f2ff; font-family:monospace; font-size:10px; border:1px solid #00f2ff; padding:5px; background:rgba(0,0,0,0.5);">
+            OBJECT: TUNNEL_MB_CORE<br>SECTIONS: 10/10 ACTIVE<br>TRAFFIC_FLOW: {round(trafic_vitesse*200)}%
+        </div>
+        <div id="render"></div>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(50, window.innerWidth/450, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
-        renderer.setSize(window.innerWidth * 0.6, 450);
-        document.getElementById('container-3d').appendChild(renderer.domElement);
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth/500, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({{antialias:true, alpha:true}});
+        renderer.setSize(window.innerWidth*0.6, 500);
+        document.getElementById('render').appendChild(renderer.domElement);
 
         const group = new THREE.Group();
-        
-        // 10 Tronçons structurels
-        for (let i = 0; i < 10; i++) {{
-            const segGeo = new THREE.CylinderGeometry(6, 6, 9, 16, 1, true);
-            const segMat = new THREE.MeshBasicMaterial({{ color: 0x00f2ff, wireframe: true, transparent: true, opacity: 0.15 }});
-            const seg = new THREE.Mesh(segGeo, segMat);
-            seg.rotation.z = Math.PI / 2;
-            seg.position.x = (i - 4.5) * 10;
-            group.add(seg);
+        const cars = [];
 
-            const ringGeo = new THREE.TorusGeometry(6.1, 0.15, 8, 40);
-            const ringMat = new THREE.MeshBasicMaterial({{ color: 0x00f2ff, opacity: 0.6, transparent: true }});
-            const ring = new THREE.Mesh(ringGeo, ringMat);
-            ring.rotation.y = Math.PI / 2;
-            ring.position.x = (i - 4.5) * 10;
-            group.add(ring);
+        // 10 Tronçons + Tunnel de service
+        for(let i=0; i<10; i++) {{
+            const x = (i-4.5)*10;
+            // Tunnel Principal
+            const t = new THREE.Mesh(new THREE.CylinderGeometry(6,6,9,16,1,true), new THREE.MeshBasicMaterial({{color:0x00f2ff,wireframe:true,opacity:0.1,transparent:true}}));
+            t.rotation.z=Math.PI/2; t.position.x=x; group.add(t);
+            // Tunnel Service
+            const s = new THREE.Mesh(new THREE.CylinderGeometry(2,2,9,8,1,true), new THREE.MeshBasicMaterial({{color:0x00f2ff,wireframe:true,opacity:0.05,transparent:true}}));
+            s.rotation.z=Math.PI/2; s.position.set(x, -8, -10); group.add(s);
         }}
 
-        {js_alea_logic}
+        // Trafic
+        for(let i=0; i<5; i++) {{
+            const c = new THREE.Mesh(new THREE.BoxGeometry(1,0.5,0.5), new THREE.MeshBasicMaterial({{color:0xffffff}}));
+            c.position.x = Math.random()*100 - 50;
+            c.position.y = -5.5;
+            cars.push(c); group.add(c);
+        }}
 
+        {js_alea}
         scene.add(group);
-        camera.position.set(60, 25, 80);
-        camera.lookAt(0, 0, 0);
+        camera.position.set(60, 25, 80); camera.lookAt(0,0,0);
 
         function animate() {{
             requestAnimationFrame(animate);
-            group.rotation.y += 0.002;
+            group.rotation.y += 0.001;
+            // Simulation trafic
+            cars.forEach(c => {{
+                c.position.x += {trafic_vitesse};
+                if(c.position.x > 50) c.position.x = -50;
+            }});
             renderer.render(scene, camera);
         }}
         animate();
     </script>
     """
-    components.html(three_js_code, height=470)
+    components.html(three_js, height=520)
 
-# --- ANALYSE DE RISQUES (DROITE) ---
+# --- ANALYSE & STRATÉGIES (DROITE / BAS) ---
 with col_anal:
-    st.markdown("### 📊 ANALYSE")
-    impact_eco = round(intensite_globale * 150, 1)
+    st.markdown("### 📊 RISK REPORT")
+    st.markdown(f'<div class="neon-panel"><p class="metric-value">-{round(intensite*180,1)} M€</p><caption style="color:#00f2ff">Pertes cumulées (5 ans)</caption></div>', unsafe_allow_html=True)
     
-    st.markdown('<div class="neon-panel">', unsafe_allow_html=True)
-    st.markdown("<p class='metric-title'>Dommages Économiques Totaux</p>", unsafe_allow_html=True)
-    st.markdown(f"<p class='metric-value'>-{impact_eco} M€</p>", unsafe_allow_html=True)
-    st.write(f"**Criticité :** {'HAUTE' if intensite_globale > 0.6 else 'MODÉRÉE'}")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.write("**Impact Politique :**")
+    st.caption("Forte pression sur les accords de transit bilatéraux et report modal forcé.")
 
-    st.markdown('<div class="neon-panel">', unsafe_allow_html=True)
-    st.markdown("<p class='metric-title'>Impact Social & Politique</p>", unsafe_allow_html=True)
-    st.write(f"Risque d'enclavement : {round(intensite_globale * 100)}%")
-    st.write("Détour fret via Fréjus requis.")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# --- STRATÉGIES (BAS) ---
 st.markdown("---")
-st.markdown("### 🛡️ PLAN D'ADAPTATION")
+st.markdown("### 🛡️ PLANS D'ADAPTATION PAR TEMPORALITÉ")
+
+# Logique de plans dynamiques
+plans = {
+    "Inondations": {
+        "6 mois": "Déploiement de pompes mobiles et capteurs de niveau d'eau laser.",
+        "2 ans": "Redimensionnement des collecteurs et étanchéification des joints de voussoirs.",
+        "5 ans": "Création d'un bassin de rétention souterrain de 50,000 m³."
+    },
+    "Glissement de terrain": {
+        "6 mois": "Installation de radars de mouvement de paroi et filets dynamiques.",
+        "2 ans": "Ancrages actifs de 30m dans le permafrost et barrières pare-blocs.",
+        "5 ans": "Construction d'une galerie de protection lourde (pare-avalanche/bloc)."
+    },
+    "Sécheresse": {
+        "6 mois": "Ajustement des seuils d'alerte thermique et monitoring des câbles HT.",
+        "2 ans": "Installation d'un système de nébulisation haute pression pour refroidissement.",
+        "5 ans": "Refonte totale de la centrale de ventilation avec échangeurs géothermiques."
+    }
+}
+
 c1, c2, c3 = st.columns(3)
 with c1:
-    st.info("**Court Terme (6 mois)** : Monitoring fibre optique et capteurs de pression temps réel.")
+    st.markdown(f'<div class="strat-card"><b>COURT TERME (6m)</b><br><small>{plans[alea]["6 mois"]}</small></div>', unsafe_allow_html=True)
 with c2:
-    st.warning("**Moyen Terme (2 ans)** : Renforcement des joints d'étanchéité et système de pompage d'urgence.")
+    st.markdown(f'<div class="strat-card"><b>MOYEN TERME (2a)</b><br><small>{plans[alea]["2 ans"]}</small></div>', unsafe_allow_html=True)
 with c3:
-    st.error("**Long Terme (5 ans)** : Construction d'un tunnel de secours ou d'une galerie de dérivation.")
+    st.markdown(f'<div class="strat-card"><b>LONG TERME (5a)</b><br><sma
