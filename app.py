@@ -1,73 +1,79 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
+import streamlit.components.v1 as components
 
-# --- CONFIGURATION ---
-st.set_page_config(layout="wide", page_title="Dashboard Adaptation Mont-Blanc")
+st.set_page_config(page_title="Mont-Blanc 3D X-Ray", layout="wide")
 
-# --- DATA SIMULATION (Logique RCP) ---
-def get_hazard_levels(rcp, horizon):
-    # Facteur multiplicateur selon le RCP et l'année
-    factor = {"2.6": 1.1, "4.5": 1.5, "8.5": 2.2}
-    time_mult = (horizon - 2024) / 76
-    base_impact = factor[rcp] * time_mult
-    
-    return {
-        "Glissement de terrain": 20 * base_impact,
-        "Inondation/Crues": 15 * base_impact,
-        "Stress Thermique": 30 * base_impact
-    }
+st.title("🚇 Modélisation 3D Dynamique : Tunnel du Mont-Blanc")
 
-# --- SIDEBAR ---
-st.sidebar.header("🕹️ Contrôle du Scénario")
-selected_rcp = st.sidebar.select_slider("Trajectoire RCP", options=["2.6", "4.5", "8.5"])
-selected_year = st.sidebar.select_slider("Horizon Temporel", options=[2024, 2050, 2100])
-
-hazards = get_hazard_levels(selected_rcp, selected_year)
-
-# --- VISUALISATION "RAYON X" DYNAMIQUE ---
-st.subheader(f"🔍 Analyse 'Rayon X' du Tunnel - Horizon {selected_year} (RCP {selected_rcp})")
-
-# Création du tunnel par tronçons
-segments = ["Portail FR", "Tronçon Central 1", "Tronçon Central 2", "Portail IT"]
-hazard_values = [hazards["Glissement de terrain"], hazards["Stress Thermique"], 
-                 hazards["Stress Thermique"]*1.2, hazards["Inondation/Crues"]]
-
-fig = go.Figure(data=[go.Bar(
-    x=segments, y=hazard_values,
-    marker_color=['#FFA500', '#FF4B4B', '#FF4B4B', '#00F2FF'],
-    text=[f"{v:.1f}% Risque" for v in hazard_values],
-    textposition='auto',
-)])
-
-fig.update_layout(title="Indice de vulnérabilité par tronçon", template="plotly_dark", height=400)
-st.plotly_chart(fig, use_container_width=True)
-
-# --- ANALYSE DES CONSÉQUENCES (Multi-Critères) ---
-st.divider()
-col1, col2 = st.columns(2)
-
+# --- INTERFACE DE CONTRÔLE ---
+col1, col2, col3 = st.columns(3)
 with col1:
-    st.markdown("### 📊 Analyse des Impacts")
-    impact_data = {
-        "Domaine": ["Économique", "Social", "Environnemental", "Technique"],
-        "Conséquence": [
-            "Perte de péage + surcoût maintenance",
-            "Rupture chaîne logistique (Fréjus saturé)",
-            "Pollution liée aux détours kilométriques",
-            "Obsolescence du système de refroidissement"
-        ],
-        "Score de Gravité (/10)": [min(10, hazards["Stress Thermique"]/3), 5, 4, 7]
-    }
-    st.table(pd.DataFrame(impact_data))
-
+    rcp = st.select_slider("Scénario RCP", options=["2.6", "4.5", "8.5"])
 with col2:
-    st.markdown("### 🛡️ Stratégies d'Adaptation (Coût-Avantage)")
-    # Logique de décision simplifiée
-    if hazards["Stress Thermique"] > 15:
-        st.warning("👉 **Action Recommandée :** Modernisation de la ventilation cryogénique.")
-        st.caption("Ratio C/A : 1.8 (Investissement lourd mais évite 6 mois de fermeture cumulée)")
-    if hazards["Glissement de terrain"] > 10:
-        st.info("👉 **Action Recommandée :** Filets dynamiques et monitoring fibre optique.")
-        st.caption("Ratio C/A : 4.2 (Coût faible, haute protection des entrées)")
+    annee = st.select_slider("Année", options=[2024, 2050, 2100])
+with col3:
+    vitesse = st.slider("Vitesse de rotation", 0.0, 0.05, 0.01)
+
+# --- LOGIQUE DE COULEUR (STYLE RAYON X) ---
+# Plus le risque est haut, plus le tunnel passe du Cyan au Rouge vif
+intensite = 0
+if rcp == "8.5" and annee == 2100:
+    intensite = 0.8
+elif annee == 2050:
+    intensite = 0.4
+
+# --- CODE THREE.JS (Le moteur 3D) ---
+# On utilise du HTML/JavaScript injecté pour le rendu 3D temps réel
+three_js_code = f"""
+<div id="container" style="width: 100%; height: 500px; background-color: #050505;"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / 500, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
+    renderer.setSize(window.innerWidth, 500);
+    document.getElementById('container').appendChild(renderer.domElement);
+
+    // Création du Tunnel (Cylindre creux)
+    const geometry = new THREE.CylinderGeometry(5, 5, 100, 32, 1, true);
+    const material = new THREE.MeshBasicMaterial({{ 
+        color: new THREE.Color({1-intensite}, {0.2}, {intensite}), 
+        wireframe: true, 
+        transparent: true, 
+        opacity: 0.5 
+    }});
+    const tunnel = new THREE.Mesh(geometry, material);
+    tunnel.rotation.z = Math.PI / 2;
+    scene.add(tunnel);
+
+    // Ajout de "tronçons" (Anneaux lumineux)
+    for (let i = -50; i <= 50; i += 10) {{
+        const ringGeo = new THREE.TorusGeometry(5.2, 0.05, 16, 100);
+        const ringMat = new THREE.MeshBasicMaterial({{ color: 0x00f2ff }});
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.x = i;
+        ring.rotation.y = Math.PI / 2;
+        scene.add(ring);
+    }}
+
+    camera.position.z = 20;
+
+    function animate() {{
+        requestAnimationFrame(animate);
+        tunnel.rotation.y += {vitesse}; // Rotation dynamique
+        renderer.render(scene, camera);
+    }}
+    animate();
+</script>
+"""
+
+components.html(three_js_code, height=520)
+
+# --- ANALYSE STRATÉGIQUE ---
+st.markdown(f"""
+### 📊 Rapport d'impact : Tronçon Central
+* **Risque thermique :** {"Élevé" if rcp == "8.5" else "Modéré"}
+* **Stratégie d'adaptation :** Renforcement de la ventilation par tronçons. 
+* **Coût estimé :** {150 if annee == 2100 else 45} M€ 
+* **Bénéfice Social :** Maintien de 2000 emplois directs liés au fret.
+""")
