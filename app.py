@@ -1,151 +1,172 @@
 import streamlit as st
-import plotly.graph_objects as go
 import numpy as np
 import streamlit.components.v1 as components
 
-st.set_page_config(layout="wide", page_title="Tunnel Mont-Blanc X-Ray v2")
+# Configuration Dashboard
+st.set_page_config(layout="wide", page_title="Mont-Blanc X-Ray V3")
 
-# --- DESIGN CSS : INTERFACE HUD NOIRE & CYAN ---
+# --- STYLE CSS : INTERFACE HUD & BULLES ---
 st.markdown("""
 <style>
     .stApp { background-color: #050505; }
-    .neon-panel {
+    
+    /* Panneau Principal */
+    .hud-container {
         border: 2px solid #00f2ff;
         border-radius: 10px;
-        padding: 20px;
-        background: rgba(0, 242, 255, 0.03);
-        box-shadow: 0 0 20px rgba(0, 242, 255, 0.1);
+        background: rgba(0, 242, 255, 0.02);
+        position: relative;
+        padding: 10px;
         margin-bottom: 20px;
     }
-    h1, h2, h3, p { color: #00f2ff !important; font-family: 'Courier New', monospace; }
-    .data-label { color: #ff4b4b !important; font-weight: bold; font-size: 1.1em; }
+
+    /* Étiquettes / Bulles d'info */
+    .info-bubble {
+        position: absolute;
+        border: 1px solid #00f2ff;
+        background: rgba(0, 0, 0, 0.8);
+        color: #00f2ff;
+        padding: 5px 10px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.8em;
+        border-radius: 4px;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+
+    /* Ligne de liaison */
+    .connector {
+        position: absolute;
+        background: #00f2ff;
+        height: 1px;
+        transform-origin: left center;
+    }
+
+    h3 { color: #00f2ff !important; font-family: 'Courier New', monospace; letter-spacing: 1px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR ---
+# --- LOGIQUE DE RISQUE (Via Sidebar) ---
 with st.sidebar:
-    st.markdown("### 🎛️ PARAMÈTRES")
-    rcp = st.select_slider("SCÉNARIO RCP", options=["2.6", "4.5", "8.5"], value="4.5")
-    annee = st.select_slider("HORIZON", options=[2024, 2050, 2100], value=2050)
+    st.title("📟 PARAMÈTRES")
+    rcp = st.select_slider("SCÉNARIO RCP", options=["2.6", "4.5", "8.5"], value="8.5")
+    annee = st.select_slider("ANNÉE", options=[2024, 2050, 2100], value=2050)
 
-# --- LOGIQUE DE RISQUE ---
-risk_val = {"2.6": 1, "4.5": 2.5, "8.5": 5}[rcp] * ((annee-2020)/40)
+# Intensité pour le code JS
+risk_score = {"2.6": 1.2, "4.5": 2.8, "8.5": 5.0}[rcp] * ((annee-2020)/30)
 
-# --- MISE EN PAGE ---
-col_main, col_stats = st.columns([2.5, 1])
+# --- INTERFACE PRINCIPALE ---
+st.markdown("### HBB SCANNER STRUCTURAL X-RAY (TEMPS RÉEL)")
 
-with col_main:
-    # --- LE TUNNEL 3D (ASPECT RÉALISTE & SEGMENTÉ) ---
-    st.markdown('<div class="neon-panel">', unsafe_allow_html=True)
-    st.markdown("### 🔬 SCANNER STRUCTUREL X-RAY (TEMPS RÉEL)")
+# Le conteneur HTML/JS qui dessine le tunnel ET les bulles
+hud_html = f"""
+<div style="position: relative; width: 100%; height: 500px; border: 2px solid #00f2ff; border-radius: 10px; overflow: hidden; background: #050505;">
     
-    three_js_code = f"""
-    <div id="tunnel-3d" style="width: 100%; height: 400px;"></div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / 400, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
-        renderer.setSize(window.innerWidth * 0.65, 400);
-        document.getElementById('tunnel-3d').appendChild(renderer.domElement);
+    <div id="three-container" style="width: 100%; height: 100%;"></div>
 
-        // Groupe pour tout le tunnel
-        const tunnelGroup = new THREE.Group();
+    <div id="labels-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;">
+        <div class="info-bubble" style="top: 20%; left: 15%; border-color: #ff4b4b; color: #ff4b4b;">
+            Glissement de terrain (Risk {round(risk_score * 0.8, 1)})
+        </div>
+        <div class="info-bubble" style="top: 60%; left: 55%;">
+            Stress Thermique (Critique)
+        </div>
+        <div class="info-bubble" style="top: 40%; left: 75%;">
+            Infiltration H2O (Zone 8)
+        </div>
+    </div>
 
-        // Création des segments massifs du tunnel
-        const segCount = 12;
-        const segLength = 10;
-        
-        for (let i = 0; i < segCount; i++) {{
-            // Cylindre principal (paroi)
-            const geo = new THREE.CylinderGeometry(8, 8, segLength, 16, 2, true);
-            const mat = new THREE.MeshBasicMaterial({{ 
-                color: 0x00f2ff, wireframe: true, transparent: true, opacity: 0.2 
-            }});
-            const segment = new THREE.Mesh(geo, mat);
-            segment.rotation.z = Math.PI / 2;
-            segment.position.x = (i - segCount/2) * segLength;
-            tunnelGroup.add(segment);
-
-            // Anneaux de renfort (les "joints" visibles sur l'image)
-            const ringGeo = new THREE.TorusGeometry(8.2, 0.3, 8, 32);
-            const ringMat = new THREE.MeshBasicMaterial({{ color: 0x00f2ff, transparent: true, opacity: 0.6 }});
-            const ring = new THREE.Mesh(ringGeo, ringMat);
-            ring.position.x = (i - segCount/2) * segLength;
-            ring.rotation.y = Math.PI / 2;
-            tunnelGroup.add(ring);
+    <style>
+        .info-bubble {{
+            position: absolute;
+            border: 1px solid #00f2ff;
+            background: rgba(0, 0, 0, 0.7);
+            color: #00f2ff;
+            padding: 4px 8px;
+            font-family: monospace;
+            font-size: 12px;
+            box-shadow: 0 0 10px rgba(0,242,255,0.3);
         }}
-        
-        // Courbe de risque rouge au sol
-        const roadGeo = new THREE.PlaneGeometry(segCount * segLength, 6);
-        const roadMat = new THREE.MeshBasicMaterial({{ 
-            color: 0xff4b4b, transparent: true, opacity: Math.min({risk_val}/6, 0.8), side: THREE.DoubleSide 
+    </style>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / 500, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
+    renderer.setSize(window.innerWidth, 500);
+    document.getElementById('three-container').appendChild(renderer.domElement);
+
+    // Construction du Tunnel Segmenté
+    const tunnelGroup = new THREE.Group();
+    const segments = 15;
+    for (let i = 0; i < segments; i++) {{
+        const geometry = new THREE.CylinderGeometry(6, 6, 8, 32, 1, true);
+        const material = new THREE.MeshBasicMaterial({{ 
+            color: 0x00f2ff, wireframe: true, transparent: true, opacity: 0.15 
         }});
-        const road = new THREE.Mesh(roadGeo, roadMat);
-        road.rotation.x = Math.PI / 2;
-        road.position.y = -7.5;
-        tunnelGroup.add(road);
+        const segment = new THREE.Mesh(geometry, material);
+        segment.rotation.z = Math.PI / 2;
+        segment.position.x = (i - segments/2) * 8.5;
+        tunnelGroup.add(segment);
 
-        // --- ICONES D'ALERTE CLIGNOTANTES ---
-        const alertGeo = new THREE.SphereGeometry(1.5, 16, 16);
-        const alertMat = new THREE.MeshBasicMaterial({{ color: 0xff0000 }});
-        const alert = new THREE.Mesh(alertGeo, alertMat);
-        alert.position.set(-20, 0, 0); // Positionner sur un tronçon
-        if ({risk_val} > 2.5) tunnelGroup.add(alert);
+        // Anneaux Structurels
+        const ringGeo = new THREE.TorusGeometry(6.1, 0.1, 8, 40);
+        const ringMat = new THREE.MeshBasicMaterial({{ color: 0x00f2ff, transparent: true, opacity: 0.4 }});
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.x = (i - segments/2) * 8.5;
+        ring.rotation.y = Math.PI / 2;
+        tunnelGroup.add(ring);
+    }}
 
-        scene.add(tunnelGroup);
-        camera.position.set(40, 15, 50);
-        camera.lookAt(0, 0, 0);
+    // Sol de risque (Lame rouge)
+    const roadGeo = new THREE.PlaneGeometry(130, 8);
+    const roadMat = new THREE.MeshBasicMaterial({{ 
+        color: 0xff4b4b, transparent: true, opacity: Math.min({risk_score}/10, 0.7), side: THREE.DoubleSide 
+    }});
+    const road = new THREE.Mesh(roadGeo, roadMat);
+    road.rotation.x = Math.PI / 2;
+    road.position.y = -5.8;
+    tunnelGroup.add(road);
 
-        function animate() {{
-            requestAnimationFrame(animate);
-            // Animation de pulsation de l'alerte
-            if (alert) {{
-                const s = 1 + Math.sin(Date.now() * 0.01) * 0.3;
-                alert.scale.set(s, s, s);
-                alert.material.opacity = 0.5 + Math.sin(Date.now() * 0.01) * 0.5;
-            }}
-            tunnelGroup.rotation.y += 0.002; // Rotation lente pour la perspective
-            renderer.render(scene, camera);
-        }}
-        animate();
-    </script>
-    """
-    components.html(three_js_code, height=420)
-    st.markdown('</div>', unsafe_allow_html=True)
+    // Points d'alerte (Sphères pulsantes)
+    const alertGeo = new THREE.SphereGeometry(1.2, 16, 16);
+    const alertMat = new THREE.MeshBasicMaterial({{ color: 0xff4b4b }});
+    const p1 = new THREE.Mesh(alertGeo, alertMat);
+    p1.position.set(-35, -2, 0);
+    tunnelGroup.add(p1);
 
-    # --- GRAPHIQUE DE RISQUE (PLOTLY) ---
-    st.markdown('<div class="neon-panel">', unsafe_allow_html=True)
-    x = np.linspace(0, 11.6, 100)
-    y = (np.exp(x/5) * risk_val / 5) + np.abs(np.sin(x)*2)
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=x, y=y, fill='tozeroy', line=dict(color='#ff4b4b', width=3)))
-    fig.update_layout(
-        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        height=200, margin=dict(l=0,r=0,t=0,b=0),
-        xaxis=dict(showgrid=False, title="DISTANCE (KM)"), yaxis=dict(showgrid=False)
-    )
-    st.plotly_chart(fig, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    const p2 = new THREE.Mesh(alertGeo, alertMat);
+    p2.position.set(10, 0, 0);
+    tunnelGroup.add(p2);
 
-with col_stats:
-    # --- PANNEAU DE DONNÉES ---
-    st.markdown('<div class="neon-panel" style="height: 680px;">', unsafe_allow_html=True)
-    st.markdown(f"### STATUS : {annee}")
-    st.markdown(f"**SCÉNARIO :** RCP {rcp}")
-    st.write("---")
-    
-    st.markdown(f"""
-    <p class="data-label">🌡️ THERMIQUE : {round(risk_val * 12, 1)}°C</p>
-    <p class="data-label">🏔️ GLISSEMENT : {"CRITIQUE" if risk_val > 4 else "SURVEILLANCE"}</p>
-    <p class="data-label">🌊 INONDATION : {round(risk_val * 15)}% PROB.</p>
-    <br><br>
-    <h4>🛡️ ADAPTATION</h4>
-    <p>- Injection résine tronçon 4<br>- Monitoring LiDAR actif<br>- Ventilation forcée niveau 3</p>
-    <br>
-    <button style="width:100%; border:1px solid #00f2ff; background:none; color:#00f2ff; padding:10px;">
-        EXPORT DATA
-    </button>
-    """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    scene.add(tunnelGroup);
+    camera.position.set(60, 20, 80);
+    camera.lookAt(0, 0, 0);
+
+    function animate() {{
+        requestAnimationFrame(animate);
+        tunnelGroup.rotation.y += 0.001; // Rotation très lente
+        
+        // Effet de pulsation sur les points d'alerte
+        const s = 1 + Math.sin(Date.now() * 0.005) * 0.2;
+        p1.scale.set(s,s,s);
+        p2.scale.set(s,s,s);
+        
+        renderer.render(scene, camera);
+    }}
+    animate();
+</script>
+"""
+
+components.html(hud_html, height=520)
+
+# --- ANALYSE TECHNIQUE (TEXTE DU BAS) ---
+st.markdown("### Analyse de structure (linéaire)")
+st.code(f"""
+// LOG_SYSTEM: SCAN_COMPLETE
+// SECTEUR_FR: RISQUE GLISSEMENT [MODE:{'CRITIQUE' if risk_score > 3 else 'STABLE'}]
+// SECTEUR_IT: PRESSION HYDROSTATIQUE [VAL:{round(risk_score * 12, 2)} bar]
+// MAINTENANCE: PRÉVENTION NIVEAU {'4' if rcp == '8.5' else '2'} ACTIVÉE
+""", language="javascript")
