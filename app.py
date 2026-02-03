@@ -276,7 +276,31 @@ if tab == "🖥️ Simulation 3D":
         else:
             st.plotly_chart(create_complex_view(risk_val), use_container_width=True)
         st.info(f"**Stratégie {cat_strat} ({horiz_strat}) :** {strategies[cat_strat][horiz_strat]}")
+        
+# --- AJOUT DE LA LÉGENDE DANS L'INTERFACE ---
+st.markdown("### 🗺️ Légende des Infrastructures")
+leg_col1, leg_col2, leg_col3 = st.columns(3)
 
+with leg_col1:
+    st.markdown("""
+    **💠 Prétraitement & Primaire**
+    * **Dégrillage (Bloc) :** Filtrage des gros déchets.
+    * **Décanteur (Cylindre Bas) :** Sédimentation physique.
+    """)
+
+with leg_col2:
+    st.markdown("""
+    **🧪 Traitement Biologique**
+    * **Bassin d'Aération (Bloc Long) :** Épuration par bactéries.
+    * **Clarificateur (Cylindre Large) :** Séparation eau/boues.
+    """)
+
+with leg_col3:
+    st.markdown("""
+    **⚡ Énergie & Résidus**
+    * **Digesteur (Tour) :** Production de biogaz.
+    * **HUB SCADA (Bloc Enterré) :** Pilotage électrique (Critique).
+    """)
     with col_k:
         st.subheader("📊 Diagnostic")
         paralysie = (risk_val * 20) if alea != "Hors Crise" else 0
