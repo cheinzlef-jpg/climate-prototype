@@ -324,7 +324,7 @@ with leg_col3:
         </div>
         """, unsafe_allow_html=True)
 
-    else:
+else:
     st.header("ℹ️ Méthodologie et Calculs")
     st.markdown("La résilience est calculée selon l'équation de risque de l'UNDRR :")
     st.latex(r"Risque = \frac{Aléa \times Vulnérabilité}{Capacité\ d'Adaptation}")
