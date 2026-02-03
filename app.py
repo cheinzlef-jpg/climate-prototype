@@ -38,13 +38,13 @@ with st.sidebar:
         
         mode_cine = st.checkbox("🎬 Rotation Cinématique")
 
-        # Calcul du score de risque combiné (0-10)
+        # Logique de calcul du risque (0-10)
         risk_val = 0 if alea == "Hors Crise" else (3 if horizon == "Actuel" else (6 if horizon == "2050" else 9))
         if rcp == "8.5" and alea != "Hors Crise": risk_val += 1
     else:
         risk_val = 0
 
-# --- 3. LOGIQUE MÉTIER & DONNÉES ---
+# --- 3. DONNÉES MÉTIER ---
 strategies = {
     "Physique": {"Court Terme": "Batardeaux amovibles.", "Moyen Terme": "Surélévation pompes.", "Long Terme": "Digue béton périmétrale."},
     "Systémique": {"Court Terme": "Protocoles délestage.", "Moyen Terme": "Micro-grid solaire.", "Long Terme": "Cycle REUT intégral."},
@@ -52,7 +52,7 @@ strategies = {
     "R&D": {"Court Terme": "Jumeau Numérique.", "Moyen Terme": "Matériaux auto-cicatrisants.", "Long Terme": "Bio-filtration thermique."}
 }
 
-# --- 4. MOTEUR DE RENDU 3D MULTI-FORMES ---
+# --- 4. MOTEUR DE RENDU 3D ---
 def create_complex_view(risk_score, angle=1.0):
     fig = go.Figure()
 
@@ -76,13 +76,13 @@ def create_complex_view(risk_score, angle=1.0):
             z=np.outer(np.ones(32), [z, z+h]), colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.4))
         fig.add_trace(go.Scatter3d(x=x+r*np.cos(theta), y=y+r*np.sin(theta), z=np.full(32, z+h), mode='lines', line=dict(color=c_line, width=3), showlegend=False))
 
-    # Architecture du site
+    # Architecture site industriel
     add_cyl(0, 0, 0, 1.5, 1.2, 2, "Bassin Traitement 1")
     add_cyl(4, 0, 0, 1.5, 1.2, 2, "Bassin Traitement 2")
     add_cube(1, 3, 0, 3, 2, 2, 5, "Unité de Pompage")
-    add_cube(5, 4, -1, 2, 2, 0.8, 8, "Local Électrique (Critique)")
+    add_cube(5, 4, -1, 2, 2, 0.8, 8, "Local Électrique")
     
-    # Tuyauterie Néon
+    # Réseau tuyauterie
     fig.add_trace(go.Scatter3d(x=[0, 0, 2.5, 5], y=[0, 3, 3, 4], z=[0.6, 0.6, 0.6, 0.6], mode='lines', line=dict(color="#00f2ff", width=5), showlegend=False))
 
     fig.update_layout(scene=dict(xaxis_visible=False, yaxis_visible=False, zaxis_visible=False,
@@ -90,12 +90,12 @@ def create_complex_view(risk_score, angle=1.0):
         paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0,r=0,b=0,t=0), height=650)
     return fig
 
-# --- 5. AFFICHAGE DES RÉSULTATS ---
+# --- 5. LOGIQUE D'AFFICHAGE ---
 if tab == "🖥️ Simulation 3D":
     col_v, col_k = st.columns([2.5, 1])
     
     with col_v:
-        st.header(f"Digital Twin : Vue Impact {alea}")
+        st.header(f"Digital Twin : Impact {alea}")
         if mode_cine:
             ph = st.empty()
             for i in range(120):
@@ -130,15 +130,13 @@ if tab == "🖥️ Simulation 3D":
 
 else:
     st.header("ℹ️ Méthodologie et Calculs")
-    st.markdown("""
-    La résilience est calculée selon l'équation de risque de l'UNDRR :
-    """)
+    st.markdown("La résilience est calculée selon l'équation de risque de l'UNDRR :")
     st.latex(r"Risque = \frac{Aléa \times Vulnérabilité}{Capacité\ d'Adaptation}")
     
-    st.subheader("Modèle de Coûts")
+    st.subheader("Modèle de Coûts et Délais")
     st.markdown("""
-    - **Dommages Directs :** Calculés sur la valeur de remplacement des actifs submergés (courbes de fragilité JRC).
-    - **Temps de Paralysie :** Indexé sur le temps de séchage, de décontamination et de remise en conformité électrique.
+    - **Dommages :** Basés sur les courbes de fragilité JRC.
+    - **Paralysie :** Temps cumulé de décontamination, séchage et mise en conformité électrique.
     """)
     
     st.table({
@@ -146,13 +144,3 @@ else:
         "Paralysie (j)": ["5-15", "15-45", "45-90", "90-180"],
         "Coût Moyen (M€)": ["0.5", "4.2", "12.5", "28.0"]
     })
-
-
-
-### Améliorations Clés :
-1.  **Hub de Contrôle Exhaustif :** La sidebar contient désormais les types d'aléas, les scénarios RCP, les horizons temporels ET les stratégies d'adaptation découpées par échéances (Court/Moyen/Long terme).
-2.  **Représentation Visuelle Industrielle :** Ajout de **bassins cylindriques**, d'unités de pompage cubiques et d'un local électrique en sous-sol (vulnérable).
-3.  **Logique "Attentive" :** Le statut passe en **"CRITIQUE"** avec un avertissement visuel clignotant dès que la paralysie dépasse 60 jours. 
-4.  **Justification Méthodologique :** L'onglet dédié explique la formule du risque et fournit un tableau de référence des coûts et délais.
-
-Veux-tu que j'ajoute un **graphique en barres** dans l'onglet méthodologie pour comparer visuellement les coûts "Sans Adaptation" vs "Avec Adaptation" ?
