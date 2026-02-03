@@ -1,8 +1,9 @@
 import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
+import time
 
-# --- 1. CONFIGURATION ET STYLE NÉON ---
+# --- 1. CONFIGURATION ET STYLE ---
 st.set_page_config(layout="wide", page_title="Digital Twin Resilience X-Ray")
 
 st.markdown("""
@@ -33,14 +34,15 @@ with st.sidebar:
         st.subheader("🛠️ Stratégie d'Adaptation")
         cat_strat = st.selectbox("Catégorie", ["Physique", "Systémique", "Gouvernance", "R&D"])
         horiz_strat = st.select_slider("Mise en œuvre", options=["< 5 ans", "5 ans", "10 ans", "20 ans"])
-
+        
         st.divider()
-st.subheader("🎬 Rendu Vidéo")
-mode_cine = st.checkbox("Activer Rotation Cinématique")
+        st.subheader("🎬 Rendu Vidéo")
+        mode_cine = st.checkbox("Activer Rotation Cinématique")
 
-        # Score de risque
+        # Calcul du score de risque
         risk_val = 0 if alea == "Hors Crise" else (3 if horizon == "Actuel" else (6 if horizon == "2050" else 9))
-        if rcp == "8.5" and alea != "Hors Crise": risk_val += 1
+        if rcp == "8.5" and alea != "Hors Crise": 
+            risk_val += 1
     else:
         risk_val = 0
 
@@ -52,11 +54,10 @@ data_strat = {
     "R&D": {"< 5 ans": "Jumeau numérique.", "5 ans": "Matériaux auto-cicatrisants.", "10 ans": "IA prédictive.", "20 ans": "Bio-filtration thermique."}
 }
 
-# --- 4. FONCTIONS DE RENDU X-RAY ---
-def create_xray_structure(risk_score):
+# --- 4. FONCTION DE RENDU X-RAY AVEC ANGLE ---
+def create_xray_structure(risk_score, angle=1.0):
     fig = go.Figure()
     
-    # Palette de couleurs dynamique
     def get_color(vulnerabilite):
         if alea == "Hors Crise": return "#00f2ff", "rgba(0, 242, 255, 0.1)"
         total = vulnerabilite + risk_score
@@ -66,11 +67,9 @@ def create_xray_structure(risk_score):
 
     def draw_cube(x, y, z, dx, dy, dz, vulne, name):
         color, fill = get_color(vulne)
-        # Faces semi-transparentes
         fig.add_trace(go.Mesh3d(x=[x,x+dx,x+dx,x,x,x+dx,x+dx,x], y=[y,y,y+dy,y+dy,y,y,y+dy,y+dy], z=[z,z,z,z,z+dz,z+dz,z+dz,z+dz],
                                 i=[7,0,0,0,4,4,6,6,4,0,3,2], j=[3,4,1,2,5,6,5,2,0,1,6,3], k=[0,7,2,3,6,7,1,1,5,5,7,6],
-                                color=fill, opacity=0.5, showscale=False, hoverinfo='name', name=name))
-        # Arêtes (Wireframe)
+                                color=fill, opacity=0.5, showscale=False, name=name))
         edges_x, edges_y, edges_z = [], [], []
         for s in [[0,1,2,3,0], [4,5,6,7,4], [0,4], [1,5], [2,6], [3,7]]:
             for i in s:
@@ -82,42 +81,46 @@ def create_xray_structure(risk_score):
         color, fill = get_color(vulne)
         theta = np.linspace(0, 2*np.pi, 32)
         cx, cy = x+r, y+r
-        # Surface
         fig.add_trace(go.Surface(x=np.outer(cx+r*np.cos(theta), np.ones(2)), y=np.outer(cy+r*np.sin(theta), np.ones(2)),
                                  z=np.outer(np.ones(32), [z, z+h]), colorscale=[[0, fill], [1, fill]], showscale=False, opacity=0.3))
-        # Cercles haut/bas
         fig.add_trace(go.Scatter3d(x=cx+r*np.cos(theta), y=cy+r*np.sin(theta), z=np.full(32, z+h), mode='lines', line=dict(color=color, width=3), showlegend=False))
 
-    # --- ARCHITECTURE DU SITE ---
+    # --- ARCHITECTURE ---
     draw_cyl(0, 0, 0, 1.2, 0.8, 2, "Clarificateur 1")
     draw_cyl(3, 0, 0, 1.2, 0.8, 2, "Clarificateur 2")
-    draw_cyl(6, 0, 0, 1.2, 0.8, 3, "Clarificateur 3")
-    draw_cube(0, 3, 0, 2.5, 1.5, 1.5, 5, "Unité de Pompage")
-    draw_cube(3.5, 3.5, 0, 1, 1, 0.8, 1, "Centre de Contrôle")
-    draw_cube(5.5, 3, -0.8, 1.5, 1.5, 0.6, 7, "Sous-sol Électrique") # VULNÉRABLE
-    draw_cube(7.5, 3.5, 0, 0.8, 0.8, 2.5, 2, "Cheminée / Évent")
-
-    # ROUTES
-    fig.add_trace(go.Scatter3d(x=[-2, 10], y=[2.5, 2.5], z=[0,0], mode='lines', line=dict(color="rgba(100,100,100,0.4)", width=15), showlegend=False))
-    fig.add_trace(go.Scatter3d(x=[2.8, 2.8], y=[-2, 6], z=[0,0], mode='lines', line=dict(color="rgba(100,100,100,0.4)", width=15), showlegend=False))
+    draw_cube(0, 3, 0, 2.5, 1.5, 1.5, 5, "Pompage")
+    draw_cube(5.5, 3, -0.8, 1.5, 1.5, 0.6, 7, "Sous-sol Elec")
     
-    # TUYAUX NÉON
-    fig.add_trace(go.Scatter3d(x=[1.2, 1.2, 4.2, 4.2, 6], y=[1.2, 3, 3, 4, 4], z=[0.5, 0.5, 0.5, 0.5, 0.5], mode='lines', line=dict(color="#00f2ff", width=6), name="Réseau Principal"))
+    # Réseau
+    fig.add_trace(go.Scatter3d(x=[1.2, 1.2, 4.2], y=[1.2, 3, 3], z=[0.5, 0.5, 0.5], mode='lines', line=dict(color="#00f2ff", width=6), showlegend=False))
 
-    fig.update_layout(scene=dict(xaxis_visible=False, yaxis_visible=False, zaxis_visible=False, 
-                      aspectmode='data', camera=dict(eye=dict(x=1.5, y=1.5, z=1))),
-                      paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0,r=0,b=0,t=0), height=600)
+    fig.update_layout(
+        scene=dict(
+            xaxis_visible=False, yaxis_visible=False, zaxis_visible=False,
+            camera=dict(eye=dict(x=1.5 * np.cos(angle), y=1.5 * np.sin(angle), z=1))
+        ),
+        paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0,r=0,b=0,t=0), height=650
+    )
     return fig
 
 # --- 5. AFFICHAGE PRINCIPAL ---
 if tab == "🖥️ Simulation 3D":
     st.header(f"Digital Twin : Vue {'X-Ray' if alea == 'Hors Crise' else 'Alerte Système'}")
-    
     col_v, col_k = st.columns([2.5, 1])
     
     with col_v:
-        st.plotly_chart(create_xray_structure(risk_val), use_container_width=True)
-        st.subheader(f"🛠️ Stratégie : {cat_strat} ({horiz_strat})")
+        if mode_cine:
+            placeholder = st.empty()
+            for i in range(100):
+                angle_rad = i * 0.06
+                fig = create_xray_structure(risk_val, angle=angle_rad)
+                placeholder.plotly_chart(fig, use_container_width=True, key=f"cine_{i}")
+                time.sleep(0.05)
+        else:
+            fig = create_xray_structure(risk_val, angle=1.0)
+            st.plotly_chart(fig, use_container_width=True)
+            
+        st.subheader(f"🛠️ Stratégie : {cat_strat}")
         st.markdown(f'<div class="strategy-box">{data_strat[cat_strat][horiz_strat]}</div>', unsafe_allow_html=True)
 
     with col_k:
@@ -130,21 +133,14 @@ if tab == "🖥️ Simulation 3D":
         </div>
         """, unsafe_allow_html=True)
         
-        # Temps de paralysie
         days = 0 if risk_val < 3 else (20 if risk_val < 6 else (60 if risk_val < 8 else 180))
         st.markdown(f"""
         <div class="info-card">
             <p style="opacity:0.7">PARALYSIE ESTIMÉE</p>
             <span class="metric-value">{days} Jours</span>
-            <div style="background:#222; height:10px; border-radius:5px; margin-top:10px;">
-                <div style="width:{min(risk_val*10, 100)}%; background:#00f2ff; height:10px; border-radius:5px;"></div>
-            </div>
         </div>
         """, unsafe_allow_html=True)
-        
-        st.table({"Intensité": ["Faible", "Moyenne", "Critique"], "Arrêt": ["0j", "20j", "180j"], "Coût": ["<1M", "8M", ">20M"]})
-
+        st.table({"Intensité": ["Faible", "Moyenne", "Critique"], "Arrêt": ["0j", "20j", "180j"]})
 else:
     st.header("ℹ️ Méthodologie")
-    st.latex(r"R = P \times V \times E")
-    st.markdown("Estimation basée sur les courbes de fragilité des infrastructures critiques (Source OCDE).")
+    st.markdown("Estimation basée sur les courbes de fragilité des infrastructures critiques.")
