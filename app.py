@@ -33,7 +33,11 @@ with st.sidebar:
         st.subheader("🛠️ Stratégie d'Adaptation")
         cat_strat = st.selectbox("Catégorie", ["Physique", "Systémique", "Gouvernance", "R&D"])
         horiz_strat = st.select_slider("Mise en œuvre", options=["< 5 ans", "5 ans", "10 ans", "20 ans"])
-        
+
+        st.divider()
+st.subheader("🎬 Rendu Vidéo")
+mode_cine = st.checkbox("Activer Rotation Cinématique")
+
         # Score de risque
         risk_val = 0 if alea == "Hors Crise" else (3 if horizon == "Actuel" else (6 if horizon == "2050" else 9))
         if rcp == "8.5" and alea != "Hors Crise": risk_val += 1
