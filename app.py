@@ -57,25 +57,73 @@ def create_complex_view(risk_score, angle=1.0):
     fig = go.Figure()
 
     def get_style(vulnerabilite):
-        if alea == "Hors Crise": return "#00f2ff", "rgba(0, 242, 255, 0.1)"
+        if alea == "Hors Crise": return "#00f2ff", "rgba(0, 242, 255, 0.05)"
         total = vulnerabilite + risk_score
-        if total < 6: return "#00ff64", "rgba(0, 255, 100, 0.1)"
-        if total < 10: return "#ffc800", "rgba(255, 200, 0, 0.2)"
-        return "#ff3232", "rgba(255, 50, 50, 0.3)"
+        if total < 6: return "#00ff64", "rgba(0, 255, 100, 0.08)"
+        if total < 10: return "#ffc800", "rgba(255, 200, 0, 0.15)"
+        return "#ff3232", "rgba(255, 50, 50, 0.25)"
 
-    def add_cube(x, y, z, dx, dy, dz, vulne, name):
+    def add_advanced_asset(x, y, z, dx, dy, dz, r, type_shape, vulne, name):
         c_line, c_fill = get_style(vulne)
-        fig.add_trace(go.Mesh3d(x=[x,x+dx,x+dx,x,x,x+dx,x+dx,x], y=[y,y,y+dy,y+dy,y,y,y+dy,y+dy], z=[z,z,z,z,z+dz,z+dz,z+dz,z+dz],
-            i=[7,0,0,0,4,4,6,6,4,0,3,2], j=[3,4,1,2,5,6,5,2,0,1,6,3], k=[0,7,2,3,6,7,1,1,5,5,7,6], color=c_fill, opacity=0.6, name=name))
-        fig.add_trace(go.Scatter3d(x=[x,x+dx,x+dx,x,x], y=[y,y,y+dy,y+dy,y], z=[z+dz,z+dz,z+dz,z+dz,z+dz], mode='lines', line=dict(color=c_line, width=3), showlegend=False))
+        
+        if type_shape == "tank": # Réservoir avec dôme
+            theta = np.linspace(0, 2*np.pi, 32)
+            # Corps
+            fig.add_trace(go.Surface(x=np.outer(x+r*np.cos(theta), np.ones(2)), y=np.outer(y+r*np.sin(theta), np.ones(2)),
+                z=np.outer(np.ones(32), [z, z+dz]), colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.4))
+            # Dôme (Hémisphère)
+            phi = np.linspace(0, np.pi/2, 16)
+            fig.add_trace(go.Surface(x=x + r*np.outer(np.cos(theta), np.cos(phi)), y=y + r*np.outer(np.sin(theta), np.cos(phi)),
+                z=z+dz + r*np.outer(np.ones(32), np.sin(phi)), colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.4))
+            # Cercles de renfort
+            fig.add_trace(go.Scatter3d(x=x+r*np.cos(theta), y=y+r*np.sin(theta), z=np.full(32, z+dz), mode='lines', line=dict(color=c_line, width=4), showlegend=False))
 
-    def add_cyl(x, y, z, r, h, vulne, name):
-        c_line, c_fill = get_style(vulne)
-        theta = np.linspace(0, 2*np.pi, 32)
-        fig.add_trace(go.Surface(x=np.outer(x+r*np.cos(theta), np.ones(2)), y=np.outer(y+r*np.sin(theta), np.ones(2)),
-            z=np.outer(np.ones(32), [z, z+h]), colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.4))
-        fig.add_trace(go.Scatter3d(x=x+r*np.cos(theta), y=y+r*np.sin(theta), z=np.full(32, z+h), mode='lines', line=dict(color=c_line, width=3), showlegend=False))
+        elif type_shape == "factory": # Bâtiment complexe (L-shape)
+            # On dessine plusieurs cubes pour une forme non-linéaire
+            for offset_x, offset_z, h in [(0,0,dz), (dx*0.6, 0, dz*1.5)]:
+                fig.add_trace(go.Mesh3d(x=[x+offset_x, x+offset_x+dx*0.4, x+offset_x+dx*0.4, x+offset_x]*2, 
+                                        y=[y, y, y+dy, y+dy]*2, 
+                                        z=[z+offset_z]*4 + [z+offset_z+h]*4,
+                                        i=[7,0,0,0,4,4,6,6,4,0,3,2], j=[3,4,1,2,5,6,5,2,0,1,6,3], k=[0,7,2,3,6,7,1,1,5,5,7,6], 
+                                        color=c_fill, opacity=0.6))
 
+    # --- ÉLÉMENTS DÉCORATIFS (GRILLE AU SOL) ---
+    grid_range = np.linspace(-5, 10, 15)
+    for g in grid_range:
+        fig.add_trace(go.Scatter3d(x=[g, g], y=[-5, 10], z=[-1, -1], mode='lines', line=dict(color="rgba(0, 242, 255, 0.1)", width=1), showlegend=False))
+        fig.add_trace(go.Scatter3d(x=[-5, 10], y=[g, g], z=[-1, -1], mode='lines', line=dict(color="rgba(0, 242, 255, 0.1)", width=1), showlegend=False))
+
+    # --- INFRASTRUCTURE ---
+    add_advanced_asset(-2, -2, -0.5, 0, 0, 2, 1.8, "tank", 2, "Stockage Brut")
+    add_advanced_asset(3, -1, -0.5, 0, 0, 1.5, 1.5, "tank", 3, "Filtration")
+    add_advanced_asset(0, 4, -0.5, 4, 3, 2, 0, "factory", 6, "Unité de Commande")
+    add_advanced_asset(6, 0, -1.2, 2, 2, 1, 0, "factory", 9, "Poste Électrique HT") # TRÈS BAS ET VULNÉRABLE
+
+    # --- RÉSEAU DE FLUX (ANIMÉ VISUELLEMENT) ---
+    pipe_x = [-2, 0, 0, 3, 6]
+    pipe_y = [-2, -2, 4, 4, 4]
+    pipe_z = [0.5, 0.5, 0.5, 0.5, 0.5]
+    fig.add_trace(go.Scatter3d(x=pipe_x, y=pipe_y, z=pipe_z, mode='lines', 
+                               line=dict(color="#00f2ff", width=8, dash='solid'), name="Flux Principal"))
+
+    # --- EFFET D'INONDATION (LUMINESCENT) ---
+    if alea == "Inondation Majeure" and risk_score > 0:
+        water_z = -1 + (risk_score * 0.15)
+        fig.add_trace(go.Mesh3d(x=[-5, 10, 10, -5], y=[-5, -5, 10, 10], z=[water_z]*4, 
+                               color="rgba(0, 150, 255, 0.3)", opacity=0.5, name="Niveau d'eau"))
+
+    fig.update_layout(
+        scene=dict(
+            xaxis_visible=False, yaxis_visible=False, zaxis_visible=False,
+            camera=dict(eye=dict(x=1.8*np.cos(angle), y=1.8*np.sin(angle), z=1.3)),
+            aspectmode='manual',
+            aspectratio=dict(x=1, y=1, z=0.5) # On aplatit un peu pour l'effet grand angle
+        ),
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, b=0, t=0),
+        height=750
+    )
+    return fig
     # Architecture site industriel
     add_cyl(0, 0, 0, 1.5, 1.2, 2, "Bassin Traitement 1")
     add_cyl(4, 0, 0, 1.5, 1.2, 2, "Bassin Traitement 2")
