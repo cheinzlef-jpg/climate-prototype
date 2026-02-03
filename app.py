@@ -2,14 +2,14 @@ import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
 
-st.set_page_config(layout="wide", page_title="Digital Twin - Station d'Épuration")
+st.set_page_config(layout="wide", page_title="Digital Twin - Station d'Épuration Schéma")
 
 # --- STYLE CSS (Fond noir, textes néon, conteneurs stylisés) ---
 st.markdown("""
 <style>
     .stApp { background-color: #050505; color: #00f2ff; }
     section[data-testid="stSidebar"] { background-color: #111; }
-    h1, h2, h3, h4, p, label { color: #00f2ff !important; }
+    h1, h2, h3, h4, p, label, .stSlider > div > div > label { color: #00f2ff !important; }
 
     /* Styles pour les conteneurs d'information */
     .info-card {
@@ -23,16 +23,12 @@ st.markdown("""
     .metric-value {
         font-size: 1.8em;
         font-weight: bold;
-        color: #ff4b4b; /* Rouge pour les alertes/coûts */
+        color: #ff4b4b; /* Rouge pour les alertes/coûts par défaut */
     }
-    .status-critical {
-        color: #ff4b4b;
-        font-weight: bold;
-    }
-    .status-ok {
-        color: #00ff00;
-        font-weight: bold;
-    }
+    .status-critical { color: #ff4b4b; font-weight: bold; }
+    .status-ok { color: #00ff00; font-weight: bold; }
+    
+    /* Boutons de stratégie */
     .strategy-button {
         background-color: #005060;
         color: #00f2ff;
@@ -47,6 +43,15 @@ st.markdown("""
         background-color: #008090;
         box-shadow: 0 0 8px rgba(0, 242, 255, 0.5);
     }
+    
+    /* Ajout pour le "HIGH SENSITIVITY" et le titre en haut à gauche */
+    .high-sensitivity {
+        color: #00f2ff;
+        font-size: 2em;
+        font-weight: bold;
+        text-shadow: 0 0 10px #00f2ff;
+        margin-bottom: 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -55,18 +60,11 @@ with st.sidebar:
     st.title("🕹️ HUB DE CONTRÔLE")
     st.subheader("Aléas Climatiques")
     
-    # Choix de l'aléa (Sécheresse / Inondation - ici "Active" pour l'image)
-    st.write("Aléa Climatique:")
-    st.markdown("<h3><span style='color:#ff4b4b;'>Sécheresse / Inondation (ACTIVE)</span></h3>", unsafe_allow_html=True) # Pour simuler l'état "ACTIVE"
-
-    # Scénario RCP
+    alea = st.selectbox("Type d'aléa", ["Inondation", "Sécheresse"])
     rcp = st.select_slider("Scénario RCP", options=["2.6", "4.5", "8.5"], value="8.5")
+    horizon = st.select_slider("Horizon Temporel", options=["Actuel", "2050", "2100"], value="2050")
 
-    # Horizon Temporel
-    horizon_options = ["Actuel", "2050", "2100"]
-    horizon = st.select_slider("Horizon Temporel", options=horizon_options, value="2050")
-
-    # Logique de calcul du niveau de risque global (pour les impacts et couleurs)
+    # Logique de calcul du niveau de risque global
     risk_level = 0
     if horizon == "2050": risk_level += 1
     if horizon == "2100": risk_level += 2
@@ -74,17 +72,16 @@ with st.sidebar:
     if rcp == "8.5": risk_level += 2
 
     st.divider()
-    st.info("Ce hub pilote la vulnérabilité des zones X-Ray et les impacts.")
+    st.info("Ce hub pilote la vulnérabilité des zones et les impacts.")
 
-# --- DÉFINITION DES ZONES DE LA STATION D'ÉPURATION ---
-# Coordonnées arbitraires pour simuler la position des éléments sur la carte
-# Les "z" sont de 0 pour les rendre plats, puis on les "élève" avec Plotly
+# --- DÉFINITION DES ZONES DE LA STATION D'ÉPURATION SCHÉMATIQUE ---
+# Coordonnées abstraites pour le schéma
 zones = {
-    "Clarificateur_1": {"x": [0.3, 0.6], "y": [0.6, 0.9], "z": [0, 0.1], "base_sensitivity": 2, "shape": "circle"},
-    "Clarificateur_2": {"x": [0.0, 0.3], "y": [0.6, 0.9], "z": [0, 0.1], "base_sensitivity": 2, "shape": "circle"},
-    "Bassin_Primaire": {"x": [0.0, 0.6], "y": [0.0, 0.5], "z": [0, 0.1], "base_sensitivity": 3, "shape": "rectangle"},
-    "Floculation_Traitement": {"x": [0.6, 0.9], "y": [0.0, 0.5], "z": [0, 0.1], "base_sensitivity": 1, "shape": "rectangle"},
-    "Batiment_Technique": {"x": [0.7, 0.9], "y": [0.6, 0.8], "z": [0, 0.2], "base_sensitivity": 1, "shape": "box"},
+    "Clarificateur_1": {"x": [-0.5, 0.5], "y": [0.5, 1.5], "z": [0, 0.2], "shape": "cylinder", "base_sensitivity": 2},
+    "Clarificateur_2": {"x": [1.0, 2.0], "y": [0.5, 1.5], "z": [0, 0.2], "shape": "cylinder", "base_sensitivity": 2},
+    "Bassin_Primaire": {"x": [-0.5, 2.0], "y": [-1.0, 0.0], "z": [0, 0.1], "shape": "box", "base_sensitivity": 3},
+    "Floculation_Traitement": {"x": [2.5, 4.0], "y": [-1.0, 0.0], "z": [0, 0.15], "shape": "box", "base_sensitivity": 1},
+    "Batiment_Controle": {"x": [2.8, 3.5], "y": [0.5, 1.0], "z": [0, 0.4], "shape": "box", "base_sensitivity": 1},
 }
 
 # --- LOGIQUE DE COULEUR DYNAMIQUE DES ZONES ---
@@ -93,39 +90,33 @@ def get_zone_color(zone_key, alea_type, current_risk_level):
     
     # Ajuster la sensibilité en fonction de l'aléa
     if alea_type == "Inondation":
-        if "Clarificateur" in zone_key: base_sens += 1 # Plus sensible aux inondations
+        if "Clarificateur" in zone_key: base_sens += 1 
         if "Bassin" in zone_key: base_sens += 1
+        if "Batiment_Controle" in zone_key: base_sens += 1 # Contrôle peut être impacté par inondation
     elif alea_type == "Sécheresse":
         if "Bassin" in zone_key: base_sens += 2 # Très sensible au manque d'eau
         if "Floculation" in zone_key: base_sens += 1
 
     final_score = base_sens + current_risk_level
 
-    if final_score <= 3: return "rgba(0, 255, 0, 0.5)"    # Vert: Faible risque
-    if final_score <= 5: return "rgba(255, 255, 0, 0.5)"  # Jaune: Risque modéré
-    if final_score <= 7: return "rgba(255, 165, 0, 0.5)"  # Orange: Risque élevé
-    return "rgba(255, 0, 0, 0.6)"                         # Rouge: Risque critique
+    # Couleurs néon pour le schéma
+    if final_score <= 3: return "rgba(0, 255, 0, 0.4)", "#00ff00"       # Vert (faible risque)
+    if final_score <= 5: return "rgba(255, 255, 0, 0.4)", "#ffff00"     # Jaune (modéré)
+    if final_score <= 7: return "rgba(255, 165, 0, 0.4)", "#ffa500"     # Orange (élevé)
+    return "rgba(255, 0, 0, 0.5)", "#ff0000"                            # Rouge (critique)
 
-# --- CRÉATION DE LA SCÈNE 3D AVEC PLOTLY ---
-def create_station_3d_view(alea_type, current_risk_level, background_image_url):
+# --- CRÉATION DE LA SCÈNE 3D SCHÉMATIQUE AVEC PLOTLY ---
+def create_schematic_3d_view(alea_type, current_risk_level):
     fig = go.Figure()
 
-    # Ajouter l'image satellite en arrière-plan
-    fig.add_layout_image(
-        source=background_image_url,
-        xref="x", yref="y",
-        x=0, y=1, sizex=1, sizey=1,  # Étirer l'image sur toute la surface (0 à 1)
-        sizing="stretch", opacity=0.8, layer="below"
-    )
-
     for zone_key, props in zones.items():
-        color = get_zone_color(zone_key, alea_type, current_risk_level)
+        fill_color, line_color = get_zone_color(zone_key, alea_type, current_risk_level)
         x_min, x_max = props["x"]
         y_min, y_max = props["y"]
         z_min, z_max = props["z"]
 
-        if props["shape"] == "circle":
-            # Représenter les clarificateurs comme des cylindres
+        if props["shape"] == "cylinder":
+            # Dessine des cylindres pour les clarificateurs
             theta = np.linspace(0, 2 * np.pi, 50)
             radius = (x_max - x_min) / 2
             center_x = (x_min + x_max) / 2
@@ -139,55 +130,61 @@ def create_station_3d_view(alea_type, current_risk_level, background_image_url):
                 x=np.outer(x_circle, np.ones(2)),
                 y=np.outer(y_circle, np.ones(2)),
                 z=np.outer(np.ones(len(theta)), [z_min, z_max]),
-                surfacecolor=np.full((len(theta), 2), 0.5), # Couleur uniforme
-                colorscale=[[0, color], [1, color]], # Appliquer la couleur dynamique
+                surfacecolor=np.full((len(theta), 2), 0.5), 
+                colorscale=[[0, fill_color], [1, fill_color]], 
                 opacity=0.6,
                 showscale=False,
                 name=zone_key
             ))
-            # Fond et couvercle (facultatif)
-            fig.add_trace(go.Mesh3d(
-                x=x_circle, y=y_circle, z=np.full_like(x_circle, z_min), opacity=0.6,
-                color=color, name=zone_key + "_bottom"
+            # Bordures pour l'effet X-ray
+            fig.add_trace(go.Scatter3d(
+                x=np.append(x_circle, x_circle[0]),
+                y=np.append(y_circle, y_circle[0]),
+                z=np.full_like(np.append(x_circle, x_circle[0]), z_max),
+                mode='lines', line=dict(color=line_color, width=3), name=zone_key + "_border_top"
             ))
-            fig.add_trace(go.Mesh3d(
-                x=x_circle, y=y_circle, z=np.full_like(x_circle, z_max), opacity=0.6,
-                color=color, name=zone_key + "_top"
+            fig.add_trace(go.Scatter3d(
+                x=np.append(x_circle, x_circle[0]),
+                y=np.append(y_circle, y_circle[0]),
+                z=np.full_like(np.append(x_circle, x_circle[0]), z_min),
+                mode='lines', line=dict(color=line_color, width=3), name=zone_key + "_border_bottom"
             ))
 
 
-        elif props["shape"] == "rectangle" or props["shape"] == "box":
-            # Représenter les bassins et bâtiments comme des boîtes
+        elif props["shape"] == "box":
+            # Dessine des boîtes pour les bassins et bâtiments
+            x_coords = [x_min, x_max, x_max, x_min, x_min, x_max, x_max, x_min]
+            y_coords = [y_min, y_min, y_max, y_max, y_min, y_min, y_max, y_max]
+            z_coords = [z_min, z_min, z_min, z_min, z_max, z_max, z_max, z_max]
+
+            # Corps du cube
             fig.add_trace(go.Mesh3d(
-                x=[x_min, x_max, x_max, x_min, x_min, x_max, x_max, x_min],
-                y=[y_min, y_min, y_max, y_max, y_min, y_min, y_max, y_max],
-                z=[z_min, z_min, z_min, z_min, z_max, z_max, z_max, z_max],
+                x=x_coords, y=y_coords, z=z_coords,
                 i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
                 j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
                 k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-                color=color, name=zone_key, opacity=0.6, showscale=False
+                color=fill_color, name=zone_key, opacity=0.6, showscale=False
+            ))
+            # Bordures pour l'effet X-ray
+            fig.add_trace(go.Scatter3d(
+                x=[x_min, x_max, x_max, x_min, x_min, x_min, x_min, x_max, x_max, x_max, x_max, x_min],
+                y=[y_min, y_min, y_max, y_max, y_min, y_min, y_max, y_max, y_min, y_min, y_max, y_max],
+                z=[z_min, z_min, z_min, z_min, z_min, z_max, z_max, z_max, z_max, z_min, z_min, z_min],
+                mode='lines', line=dict(color=line_color, width=3), name=zone_key + "_borders"
             ))
 
     fig.update_layout(
         scene=dict(
-            xaxis=dict(visible=False, range=[0, 1]), # Ajuster les ranges pour l'image
-            yaxis=dict(visible=False, range=[0, 1]),
-            zaxis=dict(visible=False, range=[0, 0.5]), # Hauteur max pour la 3D
+            xaxis=dict(visible=False, range=[-1, 5]), # Ajuster les ranges pour le schéma
+            yaxis=dict(visible=False, range=[-1.5, 2]),
+            zaxis=dict(visible=False, range=[0, 0.6]),
             aspectmode='manual',
-            aspectratio=dict(x=1, y=1, z=0.5), # Ratio pour que la 3D ne soit pas trop étirée
+            aspectratio=dict(x=1, y=1, z=0.4), # Ratio pour la perspective
             camera=dict(
-                eye=dict(x=0.5, y=0.5, z=2), # Vue initiale
-                up=dict(x=0, y=1, z=0)
+                eye=dict(x=1.8, y=1.8, z=0.8), # Vue isométrique
+                up=dict(x=0, y=0, z=1)
             )
         ),
-        images=[
-            go.layout.Image(
-                source=background_image_url,
-                xref="x", yref="y",
-                x=0, y=1, sizex=1, sizey=1, # Coordonnées de l'image
-                sizing="stretch", opacity=1, layer="below"
-            )
-        ],
         margin=dict(l=0, r=0, b=0, t=0),
         height=600,
         paper_bgcolor='rgba(0,0,0,0)',
@@ -195,28 +192,30 @@ def create_station_3d_view(alea_type, current_risk_level, background_image_url):
     )
     return fig
 
-# URL de l'image satellite que tu as fournie
-# Il est préférable de l'héberger quelque part pour une meilleure performance
-# Pour l'exemple, j'utilise une URL générique, mais tu peux remplacer par la tienne.
-SATELLITE_IMAGE_URL = "https://i.imgur.com/your-satellite-image.png" # Remplace cette URL par celle de ton image
-
 # --- LAYOUT PRINCIPAL ---
-col_hub, col_3d, col_impacts = st.columns([1, 2.5, 1])
+col_hub_info, col_3d, col_impacts = st.columns([1, 2.5, 1])
 
-# COLONNE DE GAUCHE : HUB DE CONTRÔLE (déjà en sidebar) et informations textuelles
-with col_hub:
-    st.markdown("<h4>Floculation / Primary Treatment efficiance</h4>", unsafe_allow_html=True)
+with col_hub_info:
+    st.markdown("<h3><span class='high-sensitivity'>HIGH SENSITIVITY</span></h3>", unsafe_allow_html=True)
+    st.markdown("<h4>Floculation / Primary Treatment efficiency</h4>", unsafe_allow_html=True)
     st.progress(0.75) # Exemple de jauge d'efficacité
-    st.markdown("<br><h4>HIGH SENSITIVITY</h4>", unsafe_allow_html=True) # Texte d'alerte
+    st.markdown("<br><h4>IMPACTED AT RISK</h4>", unsafe_allow_html=True) # Texte d'alerte
     # Ici, tu peux ajouter plus de détails sur les capteurs, etc.
 
-# COLONNE CENTRALE : VUE 3D X-RAY
 with col_3d:
-    st.markdown("<h3>Station d'Épuration : Vue X-Ray</h3>", unsafe_allow_html=True)
-    # Le choix de l'aléa pour les couleurs
-    active_alea = "Inondation" # Pour l'image, on suppose "Inondation ACTIVE"
-    st.plotly_chart(create_station_3d_view(active_alea, risk_level, SATELLITE_IMAGE_URL), use_container_width=True)
-    st.markdown("<br><h4>IMPACTED AT RISK</h4>", unsafe_allow_html=True)
+    st.markdown("<h3>🏗️ Schéma X-Ray : Station d'Épuration</h3>", unsafe_allow_html=True)
+    
+    # Message d'alerte au centre
+    if risk_level >= 3:
+        st.markdown(f"""
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000;">
+            <div style="background: rgba(255, 0, 0, 0.7); border: 2px solid #ff0000; border-radius: 10px; padding: 20px; text-align: center; box-shadow: 0 0 20px #ff0000;">
+                <h3 style="color: white; margin: 0;">⚠️ STRUCTURAL FAILURE IMMINENT</h3>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.plotly_chart(create_schematic_3d_view(alea, risk_level), use_container_width=True)
 
     # --- STRATÉGIES D'ADAPTATION (En bas de la 3D) ---
     st.subheader("🛠️ STRATÉGIES D'ADAPTATION")
@@ -245,7 +244,7 @@ with col_impacts:
     st.subheader("📊 ANALYSE DES IMPACTS")
     
     # Coûts des dégâts (simulés)
-    base_cost_multiplier = risk_level * 0.5 + 1 # Plus le risque est élevé, plus les coûts augmentent
+    base_cost_multiplier = risk_level * 0.7 + 1 # Plus le risque est élevé, plus les coûts augmentent
     cost_6m = 1000000 * base_cost_multiplier
     cost_2y = 5000000 * base_cost_multiplier
     cost_5y = 10000000 * base_cost_multiplier
@@ -260,7 +259,7 @@ with col_impacts:
     """, unsafe_allow_html=True)
 
     # Continuité de service
-    service_continuity = max(0, 100 - (risk_level * 15)) # Diminue avec le risque
+    service_continuity = max(0, 100 - (risk_level * 18)) # Diminue avec le risque
     status_class = "status-critical" if service_continuity < 60 else "status-ok"
     
     st.markdown(f"""
