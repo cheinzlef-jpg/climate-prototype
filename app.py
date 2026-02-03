@@ -56,36 +56,82 @@ strategies = {
 def create_complex_view(risk_score, angle=1.0):
     fig = go.Figure()
 
+    # --- LOGIQUE DE COULEUR DYNAMIQUE ---
     def get_style(vulnerabilite):
-        if alea == "Hors Crise": return "#00f2ff", "rgba(0, 242, 255, 0.05)"
-        total = vulnerabilite + risk_score
-        if total < 6: return "#00ff64", "rgba(0, 255, 100, 0.08)"
-        if total < 10: return "#ffc800", "rgba(255, 200, 0, 0.15)"
-        return "#ff3232", "rgba(255, 50, 50, 0.25)"
+        if alea == "Hors Crise": 
+            return "#00f2ff", "rgba(0, 242, 255, 0.05)"
+        
+        # Impact combiné : Aléa global + fragilité propre du bâtiment
+        impact_local = vulnerabilite + risk_score
+        if impact_local < 7:   # Résistant
+            return "#00ff64", "rgba(0, 255, 100, 0.1)"
+        elif impact_local < 11: # Moyen
+            return "#ffc800", "rgba(255, 200, 0, 0.2)"
+        else:                  # Critique
+            return "#ff3232", "rgba(255, 50, 50, 0.3)"
 
-    def add_advanced_asset(x, y, z, dx, dy, dz, r, type_shape, vulne, name):
+    # --- GÉNÉRATEUR DE FORMES AVANCÉES ---
+    def add_asset(x, y, z, dx, dy, dz, r, shape_type, vulne, name):
         c_line, c_fill = get_style(vulne)
         
-        if type_shape == "tank": # Réservoir avec dôme
-            theta = np.linspace(0, 2*np.pi, 32)
-            # Corps
-            fig.add_trace(go.Surface(x=np.outer(x+r*np.cos(theta), np.ones(2)), y=np.outer(y+r*np.sin(theta), np.ones(2)),
-                z=np.outer(np.ones(32), [z, z+dz]), colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.4))
-            # Dôme (Hémisphère)
-            phi = np.linspace(0, np.pi/2, 16)
-            fig.add_trace(go.Surface(x=x + r*np.outer(np.cos(theta), np.cos(phi)), y=y + r*np.outer(np.sin(theta), np.cos(phi)),
-                z=z+dz + r*np.outer(np.ones(32), np.sin(phi)), colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.4))
-            # Cercles de renfort
-            fig.add_trace(go.Scatter3d(x=x+r*np.cos(theta), y=y+r*np.sin(theta), z=np.full(32, z+dz), mode='lines', line=dict(color=c_line, width=4), showlegend=False))
+        if shape_type == "tower":  # Tour de process (Cylindre haut)
+            theta = np.linspace(0, 2*np.pi, 20)
+            fig.add_trace(go.Surface(x=np.outer(x+r*np.cos(theta), np.ones(2)), 
+                                     y=np.outer(y+r*np.sin(theta), np.ones(2)),
+                                     z=np.outer(np.ones(20), [z, z+dz]), 
+                                     colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.5))
+            fig.add_trace(go.Scatter3d(x=x+r*np.cos(theta), y=y+r*np.sin(theta), z=np.full(20, z+dz), 
+                                       mode='lines', line=dict(color=c_line, width=4), name=name))
 
-        elif type_shape == "factory": # Bâtiment complexe (L-shape)
-            # On dessine plusieurs cubes pour une forme non-linéaire
-            for offset_x, offset_z, h in [(0,0,dz), (dx*0.6, 0, dz*1.5)]:
-                fig.add_trace(go.Mesh3d(x=[x+offset_x, x+offset_x+dx*0.4, x+offset_x+dx*0.4, x+offset_x]*2, 
-                                        y=[y, y, y+dy, y+dy]*2, 
-                                        z=[z+offset_z]*4 + [z+offset_z+h]*4,
-                                        i=[7,0,0,0,4,4,6,6,4,0,3,2], j=[3,4,1,2,5,6,5,2,0,1,6,3], k=[0,7,2,3,6,7,1,1,5,5,7,6], 
-                                        color=c_fill, opacity=0.6))
+        elif shape_type == "hangar": # Entrepôt avec toit en pente
+            # Base
+            fig.add_trace(go.Mesh3d(x=[x, x+dx, x+dx, x, x, x+dx, x+dx, x],
+                                    y=[y, y, y+dy, y+dy, y, y, y+dy, y+dy],
+                                    z=[z, z, z, z, z+dz*0.6, z+dz*0.6, z+dz*0.6, z+dz*0.6],
+                                    color=c_fill, opacity=0.5, i=[7,0,0,0], j=[3,4,1,2], k=[0,7,2,3]))
+            # Toit
+            fig.add_trace(go.Mesh3d(x=[x, x+dx, x+dx, x, x+dx/2], 
+                                    y=[y, y, y+dy, y+dy, y+dy/2], 
+                                    z=[z+dz*0.6, z+dz*0.6, z+dz*0.6, z+dz*0.6, z+dz],
+                                    color=c_line, opacity=0.7))
+
+        elif shape_type == "block": # Bloc technique standard
+            fig.add_trace(go.Mesh3d(x=[x, x+dx, x+dx, x]*2, y=[y, y, y+dy, y+dy]*2, z=[z]*4+[z+dz]*4,
+                                    color=c_fill, opacity=0.5, name=name))
+            fig.add_trace(go.Scatter3d(x=[x, x+dx, x+dx, x, x], y=[y, y, y+dy, y+dy, y], z=[z+dz]*5, 
+                                       mode='lines', line=dict(color=c_line, width=3), showlegend=False))
+
+    # --- DESSIN DU SITE (7 Assets avec vulnérabilités différentes) ---
+    # Ordre : x, y, z, dx, dy, dz, r, type, vulne, nom
+    add_asset(-3, -3, 0, 0, 0, 4, 1.2, "tower", 3, "Unité de Craquage")
+    add_asset(3, -3, 0, 2.5, 2.5, 1.5, 0, "hangar", 4, "Entrepôt Logistique")
+    add_asset(-3, 2, 0, 0, 0, 2, 1.8, "tower", 2, "Réservoir Eau")
+    add_asset(2, 2, -1.0, 1.5, 1.5, 1.2, 0, "block", 9, "Data Center (Sous-sol)") # TRÈS VULNÉRABLE
+    add_asset(6, -2, 0, 1.2, 4, 1.0, 0, "block", 5, "Bureaux Administratifs")
+    add_asset(0, 0, 0, 0, 0, 5, 0.6, "tower", 6, "Cheminée d'Évent")
+    add_asset(5, 4, 0, 2, 2, 3, 0, "hangar", 7, "Maintenance")
+
+    # --- SOL & GRILLE ---
+    gx, gy = np.meshgrid(np.linspace(-6, 10, 10), np.linspace(-6, 8, 10))
+    fig.add_trace(go.Scatter3d(x=gx.flatten(), y=gy.flatten(), z=np.full(100, -0.1), 
+                               mode='markers', marker=dict(size=2, color="rgba(0, 242, 255, 0.3)"), showlegend=False))
+
+    # --- EFFET VISUEL D'INONDATION ---
+    if alea == "Inondation Majeure" and risk_score > 0:
+        z_water = -0.5 + (risk_score * 0.12)
+        fig.add_trace(go.Mesh3d(x=[-6, 10, 10, -6], y=[-6, -6, 8, 8], z=[z_water]*4, 
+                               color="rgba(0, 100, 255, 0.3)", opacity=0.4, name="Niveau d'eau"))
+
+    # --- CONFIGURATION CAMÉRA ---
+    fig.update_layout(
+        scene=dict(
+            xaxis_visible=False, yaxis_visible=False, zaxis_visible=False,
+            camera=dict(eye=dict(x=1.8*np.cos(angle), y=1.8*np.sin(angle), z=1.3)),
+            aspectratio=dict(x=1.2, y=1, z=0.4)
+        ),
+        paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, b=0, t=0), height=700
+    )
+    return fig
 
     # --- ÉLÉMENTS DÉCORATIFS (GRILLE AU SOL) ---
     grid_range = np.linspace(-5, 10, 15)
