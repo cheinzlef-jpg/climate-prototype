@@ -53,22 +53,100 @@ strategies = {
 }
 
 # --- 4. MOTEUR DE RENDU 3D ---
+import streamlit as st
+import plotly.graph_objects as go
+import numpy as np
+
 def create_complex_view(risk_score, angle=1.0):
     fig = go.Figure()
 
-    # --- LOGIQUE DE COULEUR DYNAMIQUE ---
+    # --- 1. LOGIQUE DE STYLE (COULEURS DYNAMIQUES) ---
     def get_style(vulnerabilite):
         if alea == "Hors Crise": 
-            return "#00f2ff", "rgba(0, 242, 255, 0.05)"
+            return "#00f2ff", "rgba(0, 242, 255, 0.2)" # Bleu Cyan
+        impact = vulnerabilite + risk_score
+        if impact < 7:   return "#00ff64", "rgba(0, 255, 100, 0.3)" # Vert
+        elif impact < 11: return "#ffc800", "rgba(255, 200, 0, 0.4)" # Orange
+        else:             return "#ff3232", "rgba(255, 50, 50, 0.5)" # Rouge
+
+    # --- 2. GÉNÉRATEUR DE FORMES (PLEINES + TRANSPARENTES) ---
+    def add_asset(x, y, z, dx, dy, dz, r, shape_type, vulne, name):
+        c_line, c_fill = get_style(vulne)
         
-        # Impact combiné : Aléa global + fragilité propre du bâtiment
-        impact_local = vulnerabilite + risk_score
-        if impact_local < 7:   # Résistant
-            return "#00ff64", "rgba(0, 255, 100, 0.1)"
-        elif impact_local < 11: # Moyen
-            return "#ffc800", "rgba(255, 200, 0, 0.2)"
-        else:                  # Critique
-            return "#ff3232", "rgba(255, 50, 50, 0.3)"
+        if shape_type == "tank": # Cylindre large (Décanteurs / Clarificateurs)
+            theta = np.linspace(0, 2*np.pi, 32)
+            fig.add_trace(go.Surface(x=np.outer(x+r*np.cos(theta), np.ones(2)), 
+                                     y=np.outer(y+r*np.sin(theta), np.ones(2)),
+                                     z=np.outer(np.ones(32), [z, z+dz]), 
+                                     colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.6, name=name))
+            fig.add_trace(go.Scatter3d(x=x+r*np.cos(theta), y=y+r*np.sin(theta), z=np.full(32, z+dz), 
+                                       mode='lines', line=dict(color=c_line, width=4), showlegend=False))
+
+        elif shape_type == "tower": # Cylindre haut (Digesteur / Silo)
+            theta = np.linspace(0, 2*np.pi, 20)
+            fig.add_trace(go.Surface(x=np.outer(x+r*np.cos(theta), np.ones(2)), 
+                                     y=np.outer(y+r*np.sin(theta), np.ones(2)),
+                                     z=np.outer(np.ones(20), [z, z+dz]), 
+                                     colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.7, name=name))
+            fig.add_trace(go.Scatter3d(x=x+r*np.cos(theta), y=y+r*np.sin(theta), z=np.full(20, z+dz), 
+                                       mode='lines', line=dict(color=c_line, width=3), showlegend=False))
+
+        elif shape_type == "block": # Rectangles (Bassins / HUB)
+            fig.add_trace(go.Mesh3d(x=[x, x+dx, x+dx, x]*2, y=[y, y, y+dy, y+dy]*2, z=[z]*4+[z+dz]*4,
+                                    i=[7,0,0,0,4,4,6,6,4,0,3,2], j=[3,4,1,2,5,6,5,2,0,1,6,3], k=[0,7,2,3,6,7,1,1,5,5,7,6],
+                                    color=c_fill, opacity=0.6, name=name))
+            # Wireframe pour le contour
+            edges = [[0,1,2,3,0], [4,5,6,7,4], [0,4], [1,5], [2,6], [3,7]]
+            for s in edges:
+                fig.add_trace(go.Scatter3d(x=[[x,x+dx,x+dx,x,x,x+dx,x+dx,x][i] for i in s],
+                                           y=[[y,y,y+dy,y+dy,y,y,y+dy,y+dy][i] for i in s],
+                                           z=[[z,z,z,z,z+dz,z+dz,z+dz,z+dz][i] for i in s],
+                                           mode='lines', line=dict(color=c_line, width=2), showlegend=False))
+
+    # --- 3. DESSIN DES ROUTES (CONNEXIONS) ---
+    route_style = dict(color="rgba(150, 150, 150, 0.4)", width=15)
+    # Route principale
+    fig.add_trace(go.Scatter3d(x=[-8, 12], y=[0, 0], z=[-0.05, -0.05], mode='lines', line=route_style, showlegend=False))
+    # Accès secondaires
+    fig.add_trace(go.Scatter3d(x=[0, 0], y=[-8, 8], z=[-0.05, -0.05], mode='lines', line=route_style, showlegend=False))
+
+    # --- 4. IMPLANTATION STEP (1 structure par typologie) ---
+    # PRÉTRAITEMENT
+    add_asset(-6, -4, 0, 3, 2, 1.5, 0, "block", 5, "Dégrillage & Dessablage")
+    
+    # PRIMAIRE
+    add_asset(-5, 4, 0, 0, 0, 1.2, 2.5, "tank", 2, "Décanteur Primaire")
+    
+    # SECONDAIRE (Bassin Aération)
+    add_asset(2, 4, 0, 6, 3, 1.5, 0, "block", 3, "Bassins Boues Activées")
+    
+    # CLARIFICATION
+    add_asset(8, -4, 0, 0, 0, 1.2, 3.0, "tank", 2, "Clarificateur Final")
+    
+    # TRAITEMENT DES BOUES
+    add_asset(-1, -6, 0, 0, 0, 5, 1.8, "tower", 4, "Digesteur (Méthaniseur)")
+    add_asset(4, -6, 0, 2, 2, 4, 0.8, "tower", 6, "Silo Stockage Boues")
+    
+    # UNITÉ TECHNIQUE & HUB (CRITIQUE)
+    add_asset(0, 0.5, -1.2, 2.5, 2.5, 2, 0, "block", 9, "Poste Électrique & SCADA")
+    add_asset(4, 0.5, 0, 2, 2, 1.5, 0, "block", 7, "Atelier Déshydratation")
+
+    # --- 5. EFFET INONDATION ---
+    if alea == "Inondation Majeure" and risk_score > 0:
+        water_level = -0.8 + (risk_score * 0.15)
+        fig.add_trace(go.Mesh3d(x=[-10, 15, 15, -10], y=[-10, -10, 10, 10], z=[water_level]*4, 
+                               color="rgba(0, 120, 255, 0.3)", opacity=0.5))
+
+    # --- 6. MISE EN PAGE ---
+    fig.update_layout(
+        scene=dict(
+            xaxis_visible=False, yaxis_visible=False, zaxis_visible=False,
+            camera=dict(eye=dict(x=1.8*np.cos(angle), y=1.8*np.sin(angle), z=1.2)),
+            aspectratio=dict(x=1.5, y=1, z=0.5)
+        ),
+        paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, b=0, t=0), height=800
+    )
+    return fig
 
     # --- GÉNÉRATEUR DE FORMES AVANCÉES ---
     def add_asset(x, y, z, dx, dy, dz, r, shape_type, vulne, name):
