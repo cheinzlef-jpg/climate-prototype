@@ -3,340 +3,194 @@ import plotly.graph_objects as go
 import numpy as np
 import time
 
-# --- 1. CONFIGURATION ET STYLE ---
-st.set_page_config(layout="wide", page_title="Industrial Resilience Command Center")
+# --- 1. CONFIGURATION & DESIGN ---
+st.set_page_config(layout="wide", page_title="STEP Digital Twin Resilience", page_icon="🛡️")
 
 st.markdown("""
 <style>
     .stApp { background-color: #010203; color: #00f2ff; }
     section[data-testid="stSidebar"] { background-color: #05080a; border-right: 1px solid #00f2ff; }
-    .info-card { background: rgba(0, 20, 35, 0.9); border: 1px solid #00f2ff; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
-    .metric-value { font-size: 2.2em; font-weight: bold; text-shadow: 0 0 10px #00f2ff; }
-    .status-ok { color: #00ff64; }
-    .status-warn { color: #ffc800; text-shadow: 0 0 10px #ffc800; }
-    .status-critical { color: #ff3232; font-weight: bold; text-shadow: 0 0 15px #ff3232; animation: blinker 1.2s linear infinite; }
+    .strat-box { background: rgba(0, 242, 255, 0.07); border-left: 5px solid #00f2ff; padding: 20px; border-radius: 8px; margin-top: 15px; border: 1px solid rgba(0, 242, 255, 0.1); }
+    .info-card { background: rgba(0, 20, 35, 0.9); border: 1px solid #00f2ff; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
+    .status-critical { color: #ff3232; font-weight: bold; text-shadow: 0 0 10px #ff3232; animation: blinker 1.5s linear infinite; }
     @keyframes blinker { 50% { opacity: 0.3; } }
+    .legend-text { font-size: 0.85em; color: #e0e0e0; line-height: 1.4; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- 2. HUB DE CONTRÔLE (SIDEBAR) ---
 with st.sidebar:
-    st.title("🛡️ HUB RESILIENCE")
-    tab = st.radio("SÉLECTION VUE", ["🖥️ Simulation 3D", "ℹ️ Méthodologie"])
-    st.divider()
+    st.title("🛡️ RESILIENCE HUB")
+    st.markdown("---")
+    tab = st.radio("SÉLECTIONNER VUE", ["🖥️ Simulation 3D", "ℹ️ Méthodologie"])
     
-    if tab == "🖥️ Simulation 3D":
-        st.subheader("📡 Scénario Climatique")
-        alea = st.selectbox("Type d'Aléa", ["Hors Crise", "Inondation Majeure", "Sécheresse Critique"])
-        rcp = st.select_slider("Trajectoire RCP", options=["2.6", "4.5", "8.5"], value="8.5")
-        horizon = st.select_slider("Horizon Temporel", options=["Actuel", "2050", "2100"], value="2050")
-        
-        st.divider()
-        st.subheader("🛠️ Stratégies d'Adaptation")
-        cat_strat = st.selectbox("Catégorie", ["Physique", "Systémique", "Gouvernance", "R&D"])
-        horiz_strat = st.select_slider("Échéance", options=["Court Terme", "Moyen Terme", "Long Terme"])
-        
-        mode_cine = st.checkbox("🎬 Rotation Cinématique")
+    st.subheader("📡 Paramètres Climatiques")
+    alea = st.selectbox("Type d'Aléa", ["Hors Crise", "Inondation Majeure", "Sécheresse Critique"])
+    rcp = st.select_slider("Trajectoire RCP", options=["2.6", "4.5", "8.5"], value="8.5")
+    horizon = st.select_slider("Horizon Temporel", options=["Actuel", "2050", "2100"], value="2050")
+    
+    st.divider()
+    st.subheader("🛠️ Stratégies d'Adaptation")
+    cat_strat = st.selectbox("Catégorie", ["Physique", "Systémique", "Gouvernance", "R&D"])
+    horiz_strat = st.select_slider("Échéance", options=["Court Terme", "Moyen Terme", "Long Terme"])
+    
+    mode_cine = st.checkbox("🎬 Rotation Cinématique")
 
-        # Logique de calcul du risque (0-10)
-        risk_val = 0 if alea == "Hors Crise" else (3 if horizon == "Actuel" else (6 if horizon == "2050" else 9))
-        if rcp == "8.5" and alea != "Hors Crise": risk_val += 1
-    else:
-        risk_val = 0
+    # Calcul du Risque Global (Score 0-10)
+    risk_val = 0 if alea == "Hors Crise" else (3 if horizon == "Actuel" else (6 if horizon == "2050" else 9))
+    if rcp == "8.5" and alea != "Hors Crise": risk_val = min(10, risk_val + 1)
 
-# --- 3. DONNÉES MÉTIER ---
-strategies = {
-    "Physique": {"Court Terme": "Batardeaux amovibles.", "Moyen Terme": "Surélévation pompes.", "Long Terme": "Digue béton périmétrale."},
-    "Systémique": {"Court Terme": "Protocoles délestage.", "Moyen Terme": "Micro-grid solaire.", "Long Terme": "Cycle REUT intégral."},
-    "Gouvernance": {"Court Terme": "Audit assurance.", "Moyen Terme": "Alerte IoT IA.", "Long Terme": "Délocalisation stratégique."},
-    "R&D": {"Court Terme": "Jumeau Numérique.", "Moyen Terme": "Matériaux auto-cicatrisants.", "Long Terme": "Bio-filtration thermique."}
+# --- 3. BASE DE DONNÉES DES STRATÉGIES ---
+strat_db = {
+    "Physique": {
+        "Court Terme": "**Batardeaux amovibles & Étanchéité.** Installation de barrières rapides sur les seuils des bâtiments critiques. *Objectif : Empêcher l'intrusion d'eau lors de crues soudaines.*",
+        "Moyen Terme": "**Surélévation des Actifs.** Rehaussement des armoires électriques et pompes de +1.2m sur socles béton. *Objectif : Maintenir le fonctionnement même en cas de submersion partielle du site.*",
+        "Long Terme": "**Digue de Protection Périmétrale.** Construction d'un mur de protection étanche (muret ou digue) autour de l'enceinte. *Objectif : Protection totale contre le scénario RCP 8.5 horizon 2100.*"
+    },
+    "Systémique": {
+        "Court Terme": "**Modes Dégradés & Délestage.** Programmation des automates pour isoler les secteurs secondaires et sauver la file de traitement principale. *Objectif : Éviter la paralysie totale.*",
+        "Moyen Terme": "**Autonomie Énergétique (Micro-grid).** Panneaux photovoltaïques et batteries pour assurer 24h d'autonomie en cas de coupure réseau. *Objectif : Résilience face aux pannes d'infrastructure externe.*",
+        "Long Terme": "**Modularité Hydraulique.** Refonte du réseau pour permettre le 'bypass' de n'importe quel bassin endommagé. *Objectif : Flexibilité totale du process face aux aléas.*"
+    },
+    "Gouvernance": {
+        "Court Terme": "**Plans d'Urgence & Audit.** Révision des contrats d'astreinte et des procédures de sécurité. *Objectif : Réaction humaine optimisée en moins de 2h.*",
+        "Moyen Terme": "**Alerte Prédictive IoT.** Déploiement de capteurs de niveau connectés en amont de la rivière avec IA prédictive. *Objectif : Anticiper la crise 12h avant l'impact.*",
+        "Long Terme": "**Relocalisation Stratégique.** Déplacement des équipements les plus sensibles (HUB Energie) vers des zones topographiques hautes. *Objectif : Zéro risque résiduel.*"
+    },
+    "R&D": {
+        "Court Terme": "**Jumeau Numérique de Crise.** Modélisation hydraulique 3D pour tester les points de rupture virtuellement. *Objectif : Optimiser les investissements de protection.*",
+        "Moyen Terme": "**Bio-procédés Thermorésistants.** Recherche sur des bactéries épuratrices capables de supporter les chocs thermiques des sécheresses. *Objectif : Maintenir la qualité de l'eau rejetée.*",
+        "Long Terme": "**Matériaux Auto-Réparateurs.** Bétons innovants pour les bassins résistant aux cycles de fissuration sécheresse/gel. *Objectif : Allonger la durée de vie de l'infra de 50 ans.*"
+    }
 }
 
 # --- 4. MOTEUR DE RENDU 3D ---
-import streamlit as st
-import plotly.graph_objects as go
-import numpy as np
-
-def create_complex_view(risk_score, angle=1.0):
+def create_step_view(risk_score, angle=1.0):
     fig = go.Figure()
 
-    # --- 1. LOGIQUE DE STYLE (COULEURS DYNAMIQUES) ---
     def get_style(vulnerabilite):
-        if alea == "Hors Crise": 
-            return "#00f2ff", "rgba(0, 242, 255, 0.2)" # Bleu Cyan
-        impact = vulnerabilite + risk_score
-        if impact < 7:   return "#00ff64", "rgba(0, 255, 100, 0.3)" # Vert
-        elif impact < 11: return "#ffc800", "rgba(255, 200, 0, 0.4)" # Orange
-        else:             return "#ff3232", "rgba(255, 50, 50, 0.5)" # Rouge
+        if alea == "Hors Crise": return "#00f2ff", "rgba(0, 242, 255, 0.2)"
+        impact = min(10, vulnerabilite + risk_score)
+        if impact < 7: return "#00ff64", "rgba(0, 255, 100, 0.3)"
+        if impact < 11: return "#ffc800", "rgba(255, 200, 0, 0.4)"
+        return "#ff3232", "rgba(255, 50, 50, 0.5)"
 
-    # --- 2. GÉNÉRATEUR DE FORMES (PLEINES + TRANSPARENTES) ---
     def add_asset(x, y, z, dx, dy, dz, r, shape_type, vulne, name):
         c_line, c_fill = get_style(vulne)
-        
-        if shape_type == "tank": # Cylindre large (Décanteurs / Clarificateurs)
+        if shape_type in ["tank", "tower"]:
             theta = np.linspace(0, 2*np.pi, 32)
             fig.add_trace(go.Surface(x=np.outer(x+r*np.cos(theta), np.ones(2)), 
-                                     y=np.outer(y+r*np.sin(theta), np.ones(2)),
-                                     z=np.outer(np.ones(32), [z, z+dz]), 
-                                     colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.6, name=name))
+                y=np.outer(y+r*np.sin(theta), np.ones(2)), z=np.outer(np.ones(32), [z, z+dz]),
+                colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.6, name=name))
             fig.add_trace(go.Scatter3d(x=x+r*np.cos(theta), y=y+r*np.sin(theta), z=np.full(32, z+dz), 
-                                       mode='lines', line=dict(color=c_line, width=4), showlegend=False))
-
-        elif shape_type == "tower": # Cylindre haut (Digesteur / Silo)
-            theta = np.linspace(0, 2*np.pi, 20)
-            fig.add_trace(go.Surface(x=np.outer(x+r*np.cos(theta), np.ones(2)), 
-                                     y=np.outer(y+r*np.sin(theta), np.ones(2)),
-                                     z=np.outer(np.ones(20), [z, z+dz]), 
-                                     colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.7, name=name))
-            fig.add_trace(go.Scatter3d(x=x+r*np.cos(theta), y=y+r*np.sin(theta), z=np.full(20, z+dz), 
-                                       mode='lines', line=dict(color=c_line, width=3), showlegend=False))
-
-        elif shape_type == "block": # Rectangles (Bassins / HUB)
+                mode='lines', line=dict(color=c_line, width=3), showlegend=False))
+        elif shape_type == "block":
             fig.add_trace(go.Mesh3d(x=[x, x+dx, x+dx, x]*2, y=[y, y, y+dy, y+dy]*2, z=[z]*4+[z+dz]*4,
-                                    i=[7,0,0,0,4,4,6,6,4,0,3,2], j=[3,4,1,2,5,6,5,2,0,1,6,3], k=[0,7,2,3,6,7,1,1,5,5,7,6],
-                                    color=c_fill, opacity=0.6, name=name))
-            # Wireframe pour le contour
+                color=c_fill, opacity=0.6, i=[7,0,0,0,4,4,6,6], j=[3,4,1,2,5,6,5,2], k=[0,7,2,3,6,7,1,1], name=name))
             edges = [[0,1,2,3,0], [4,5,6,7,4], [0,4], [1,5], [2,6], [3,7]]
             for s in edges:
                 fig.add_trace(go.Scatter3d(x=[[x,x+dx,x+dx,x,x,x+dx,x+dx,x][i] for i in s],
-                                           y=[[y,y,y+dy,y+dy,y,y,y+dy,y+dy][i] for i in s],
-                                           z=[[z,z,z,z,z+dz,z+dz,z+dz,z+dz][i] for i in s],
-                                           mode='lines', line=dict(color=c_line, width=2), showlegend=False))
+                    y=[[y,y,y+dy,y+dy,y,y,y+dy,y+dy][i] for i in s], z=[[z,z,z,z,z+dz,z+dz,z+dz,z+dz][i] for i in s],
+                    mode='lines', line=dict(color=c_line, width=2), showlegend=False))
 
-    # --- 3. DESSIN DES ROUTES (CONNEXIONS) ---
-    route_style = dict(color="rgba(150, 150, 150, 0.4)", width=15)
-    # Route principale
-    fig.add_trace(go.Scatter3d(x=[-8, 12], y=[0, 0], z=[-0.05, -0.05], mode='lines', line=route_style, showlegend=False))
-    # Accès secondaires
-    fig.add_trace(go.Scatter3d(x=[0, 0], y=[-8, 8], z=[-0.05, -0.05], mode='lines', line=route_style, showlegend=False))
+    # Routes de connexion
+    route_col = "rgba(100, 100, 100, 0.4)"
+    fig.add_trace(go.Scatter3d(x=[-8, 12], y=[0, 0], z=[-0.02, -0.02], mode='lines', line=dict(color=route_col, width=15), showlegend=False))
+    fig.add_trace(go.Scatter3d(x=[0, 0], y=[-8, 8], z=[-0.02, -0.02], mode='lines', line=dict(color=route_col, width=15), showlegend=False))
 
-    # --- 4. IMPLANTATION STEP (1 structure par typologie) ---
-    # PRÉTRAITEMENT
-    add_asset(-6, -4, 0, 3, 2, 1.5, 0, "block", 5, "Dégrillage & Dessablage")
-    
-    # PRIMAIRE
-    add_asset(-5, 4, 0, 0, 0, 1.2, 2.5, "tank", 2, "Décanteur Primaire")
-    
-    # SECONDAIRE (Bassin Aération)
-    add_asset(2, 4, 0, 6, 3, 1.5, 0, "block", 3, "Bassins Boues Activées")
-    
-    # CLARIFICATION
-    add_asset(8, -4, 0, 0, 0, 1.2, 3.0, "tank", 2, "Clarificateur Final")
-    
-    # TRAITEMENT DES BOUES
-    add_asset(-1, -6, 0, 0, 0, 5, 1.8, "tower", 4, "Digesteur (Méthaniseur)")
-    add_asset(4, -6, 0, 2, 2, 4, 0.8, "tower", 6, "Silo Stockage Boues")
-    
-    # UNITÉ TECHNIQUE & HUB (CRITIQUE)
-    add_asset(0, 0.5, -1.2, 2.5, 2.5, 2, 0, "block", 9, "Poste Électrique & SCADA")
-    add_asset(4, 0.5, 0, 2, 2, 1.5, 0, "block", 7, "Atelier Déshydratation")
+    # Implantation de la STEP (11 Structures)
+    add_asset(-6, -4, 0, 3, 2, 1.2, 0, "block", 5, "Dégrillage")
+    add_asset(-3, -4, 0, 2, 2, 0.8, 0, "block", 4, "Dessablage")
+    add_asset(-5, 4, 0, 0, 0, 1.0, 2.8, "tank", 2, "Décanteur Primaire")
+    add_asset(2, 4, 0, 6, 3, 1.5, 0, "block", 3, "Bassin Aération 1")
+    add_asset(2, 7.5, 0, 6, 3, 1.5, 0, "block", 3, "Bassin Aération 2")
+    add_asset(8, -4, 0, 0, 0, 1.0, 3.2, "tank", 2, "Clarificateur Final")
+    add_asset(-2, -6, 0, 0, 0, 5, 1.8, "tower", 4, "Digesteur Biogaz")
+    add_asset(4, -6, 0, 2, 2, 4, 0.8, "tower", 6, "Silo à Boues")
+    add_asset(0, 0.5, -1.2, 2.5, 2.5, 2, 0, "block", 9, "HUB Énergie & SCADA")
+    add_asset(4, 0.5, 0, 2, 2, 1.5, 0, "block", 7, "Traitement des Boues")
+    add_asset(-7, 0.5, 0, 2, 3, 2, 0, "block", 4, "Administration")
 
-    # --- 5. EFFET INONDATION ---
-    if alea == "Inondation Majeure" and risk_score > 0:
-        water_level = -0.8 + (risk_score * 0.15)
-        fig.add_trace(go.Mesh3d(x=[-10, 15, 15, -10], y=[-10, -10, 10, 10], z=[water_level]*4, 
-                               color="rgba(0, 120, 255, 0.3)", opacity=0.5))
-
-    # --- 6. MISE EN PAGE ---
-    fig.update_layout(
-        scene=dict(
-            xaxis_visible=False, yaxis_visible=False, zaxis_visible=False,
-            camera=dict(eye=dict(x=1.8*np.cos(angle), y=1.8*np.sin(angle), z=1.2)),
-            aspectratio=dict(x=1.5, y=1, z=0.5)
-        ),
-        paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, b=0, t=0), height=800
-    )
-    return fig
-
-    # --- GÉNÉRATEUR DE FORMES AVANCÉES ---
-    def add_asset(x, y, z, dx, dy, dz, r, shape_type, vulne, name):
-        c_line, c_fill = get_style(vulne)
-        
-        if shape_type == "tower":  # Tour de process (Cylindre haut)
-            theta = np.linspace(0, 2*np.pi, 20)
-            fig.add_trace(go.Surface(x=np.outer(x+r*np.cos(theta), np.ones(2)), 
-                                     y=np.outer(y+r*np.sin(theta), np.ones(2)),
-                                     z=np.outer(np.ones(20), [z, z+dz]), 
-                                     colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.5))
-            fig.add_trace(go.Scatter3d(x=x+r*np.cos(theta), y=y+r*np.sin(theta), z=np.full(20, z+dz), 
-                                       mode='lines', line=dict(color=c_line, width=4), name=name))
-
-        elif shape_type == "hangar": # Entrepôt avec toit en pente
-            # Base
-            fig.add_trace(go.Mesh3d(x=[x, x+dx, x+dx, x, x, x+dx, x+dx, x],
-                                    y=[y, y, y+dy, y+dy, y, y, y+dy, y+dy],
-                                    z=[z, z, z, z, z+dz*0.6, z+dz*0.6, z+dz*0.6, z+dz*0.6],
-                                    color=c_fill, opacity=0.5, i=[7,0,0,0], j=[3,4,1,2], k=[0,7,2,3]))
-            # Toit
-            fig.add_trace(go.Mesh3d(x=[x, x+dx, x+dx, x, x+dx/2], 
-                                    y=[y, y, y+dy, y+dy, y+dy/2], 
-                                    z=[z+dz*0.6, z+dz*0.6, z+dz*0.6, z+dz*0.6, z+dz],
-                                    color=c_line, opacity=0.7))
-
-        elif shape_type == "block": # Bloc technique standard
-            fig.add_trace(go.Mesh3d(x=[x, x+dx, x+dx, x]*2, y=[y, y, y+dy, y+dy]*2, z=[z]*4+[z+dz]*4,
-                                    color=c_fill, opacity=0.5, name=name))
-            fig.add_trace(go.Scatter3d(x=[x, x+dx, x+dx, x, x], y=[y, y, y+dy, y+dy, y], z=[z+dz]*5, 
-                                       mode='lines', line=dict(color=c_line, width=3), showlegend=False))
-
-    # --- DESSIN DU SITE (7 Assets avec vulnérabilités différentes) ---
-    # Ordre : x, y, z, dx, dy, dz, r, type, vulne, nom
-    add_asset(-3, -3, 0, 0, 0, 4, 1.2, "tower", 3, "Unité de Craquage")
-    add_asset(3, -3, 0, 2.5, 2.5, 1.5, 0, "hangar", 4, "Entrepôt Logistique")
-    add_asset(-3, 2, 0, 0, 0, 2, 1.8, "tower", 2, "Réservoir Eau")
-    add_asset(2, 2, -1.0, 1.5, 1.5, 1.2, 0, "block", 9, "Data Center (Sous-sol)") # TRÈS VULNÉRABLE
-    add_asset(6, -2, 0, 1.2, 4, 1.0, 0, "block", 5, "Bureaux Administratifs")
-    add_asset(0, 0, 0, 0, 0, 5, 0.6, "tower", 6, "Cheminée d'Évent")
-    add_asset(5, 4, 0, 2, 2, 3, 0, "hangar", 7, "Maintenance")
-
-    # --- SOL & GRILLE ---
-    gx, gy = np.meshgrid(np.linspace(-6, 10, 10), np.linspace(-6, 8, 10))
-    fig.add_trace(go.Scatter3d(x=gx.flatten(), y=gy.flatten(), z=np.full(100, -0.1), 
-                               mode='markers', marker=dict(size=2, color="rgba(0, 242, 255, 0.3)"), showlegend=False))
-
-    # --- EFFET VISUEL D'INONDATION ---
-    if alea == "Inondation Majeure" and risk_score > 0:
-        z_water = -0.5 + (risk_score * 0.12)
-        fig.add_trace(go.Mesh3d(x=[-6, 10, 10, -6], y=[-6, -6, 8, 8], z=[z_water]*4, 
-                               color="rgba(0, 100, 255, 0.3)", opacity=0.4, name="Niveau d'eau"))
-
-    # --- CONFIGURATION CAMÉRA ---
-    fig.update_layout(
-        scene=dict(
-            xaxis_visible=False, yaxis_visible=False, zaxis_visible=False,
-            camera=dict(eye=dict(x=1.8*np.cos(angle), y=1.8*np.sin(angle), z=1.3)),
-            aspectratio=dict(x=1.2, y=1, z=0.4)
-        ),
-        paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, b=0, t=0), height=700
-    )
-    return fig
-
-    # --- ÉLÉMENTS DÉCORATIFS (GRILLE AU SOL) ---
-    grid_range = np.linspace(-5, 10, 15)
-    for g in grid_range:
-        fig.add_trace(go.Scatter3d(x=[g, g], y=[-5, 10], z=[-1, -1], mode='lines', line=dict(color="rgba(0, 242, 255, 0.1)", width=1), showlegend=False))
-        fig.add_trace(go.Scatter3d(x=[-5, 10], y=[g, g], z=[-1, -1], mode='lines', line=dict(color="rgba(0, 242, 255, 0.1)", width=1), showlegend=False))
-
-    # --- INFRASTRUCTURE ---
-    add_advanced_asset(-2, -2, -0.5, 0, 0, 2, 1.8, "tank", 2, "Stockage Brut")
-    add_advanced_asset(3, -1, -0.5, 0, 0, 1.5, 1.5, "tank", 3, "Filtration")
-    add_advanced_asset(0, 4, -0.5, 4, 3, 2, 0, "factory", 6, "Unité de Commande")
-    add_advanced_asset(6, 0, -1.2, 2, 2, 1, 0, "factory", 9, "Poste Électrique HT") # TRÈS BAS ET VULNÉRABLE
-
-    # --- RÉSEAU DE FLUX (ANIMÉ VISUELLEMENT) ---
-    pipe_x = [-2, 0, 0, 3, 6]
-    pipe_y = [-2, -2, 4, 4, 4]
-    pipe_z = [0.5, 0.5, 0.5, 0.5, 0.5]
-    fig.add_trace(go.Scatter3d(x=pipe_x, y=pipe_y, z=pipe_z, mode='lines', 
-                               line=dict(color="#00f2ff", width=8, dash='solid'), name="Flux Principal"))
-
-    # --- EFFET D'INONDATION (LUMINESCENT) ---
-    if alea == "Inondation Majeure" and risk_score > 0:
-        water_z = -1 + (risk_score * 0.15)
-        fig.add_trace(go.Mesh3d(x=[-5, 10, 10, -5], y=[-5, -5, 10, 10], z=[water_z]*4, 
-                               color="rgba(0, 150, 255, 0.3)", opacity=0.5, name="Niveau d'eau"))
-
-    fig.update_layout(
-        scene=dict(
-            xaxis_visible=False, yaxis_visible=False, zaxis_visible=False,
-            camera=dict(eye=dict(x=1.8*np.cos(angle), y=1.8*np.sin(angle), z=1.3)),
-            aspectmode='manual',
-            aspectratio=dict(x=1, y=1, z=0.5) # On aplatit un peu pour l'effet grand angle
-        ),
-        paper_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=0, r=0, b=0, t=0),
-        height=750
-    )
-    return fig
-    # Architecture site industriel
-    add_cyl(0, 0, 0, 1.5, 1.2, 2, "Bassin Traitement 1")
-    add_cyl(4, 0, 0, 1.5, 1.2, 2, "Bassin Traitement 2")
-    add_cube(1, 3, 0, 3, 2, 2, 5, "Unité de Pompage")
-    add_cube(5, 4, -1, 2, 2, 0.8, 8, "Local Électrique")
-    
-    # Réseau tuyauterie
-    fig.add_trace(go.Scatter3d(x=[0, 0, 2.5, 5], y=[0, 3, 3, 4], z=[0.6, 0.6, 0.6, 0.6], mode='lines', line=dict(color="#00f2ff", width=5), showlegend=False))
+    # Simulation de l'eau (Inondation)
+    if alea == "Inondation Majeure" and risk_val > 0:
+        z_water = -0.8 + (risk_val * 0.15)
+        fig.add_trace(go.Mesh3d(x=[-10, 15, 15, -10], y=[-10, -10, 10, 10], z=[z_water]*4, color="rgba(0, 120, 255, 0.3)", opacity=0.4))
 
     fig.update_layout(scene=dict(xaxis_visible=False, yaxis_visible=False, zaxis_visible=False,
-        camera=dict(eye=dict(x=1.7*np.cos(angle), y=1.7*np.sin(angle), z=1.2))),
-        paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0,r=0,b=0,t=0), height=650)
+        camera=dict(eye=dict(x=1.8*np.cos(angle), y=1.8*np.sin(angle), z=1.2)), aspectratio=dict(x=1.5, y=1, z=0.4)),
+        paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, b=0, t=0), height=700)
     return fig
 
-# --- 5. LOGIQUE D'AFFICHAGE ---
+# --- 5. LOGIQUE D'AFFICHAGE PRINCIPAL ---
 if tab == "🖥️ Simulation 3D":
-    col_v, col_k = st.columns([2.5, 1])
+    col_vis, col_data = st.columns([2.5, 1])
     
-    with col_v:
-        st.header(f"Digital Twin : Impact {alea}")
+    with col_vis:
+        st.header(f"💠 Digital Twin : {alea} (RCP {rcp})")
+        
+        # Gestion de l'animation
         if mode_cine:
-            ph = st.empty()
-            for i in range(120):
-                ph.plotly_chart(create_complex_view(risk_val, angle=i*0.05), use_container_width=True, key=f"v_{i}")
-                time.sleep(0.04)
+            placeholder = st.empty()
+            for i in range(60):
+                placeholder.plotly_chart(create_step_view(risk_val, angle=i*0.1), use_container_width=True, key=f"anim_{i}")
+                time.sleep(0.05)
         else:
-            st.plotly_chart(create_complex_view(risk_val), use_container_width=True)
-        st.info(f"**Stratégie {cat_strat} ({horiz_strat}) :** {strategies[cat_strat][horiz_strat]}")
+            st.plotly_chart(create_step_view(risk_val), use_container_width=True)
         
-# --- AJOUT DE LA LÉGENDE DANS L'INTERFACE ---
-st.markdown("### 🗺️ Légende des Infrastructures")
-leg_col1, leg_col2, leg_col3 = st.columns(3)
-
-with leg_col1:
-    st.markdown("""
-    **💠 Prétraitement & Primaire**
-    * **Dégrillage (Bloc) :** Filtrage des gros déchets.
-    * **Décanteur (Cylindre Bas) :** Sédimentation physique.
-    """)
-
-with leg_col2:
-    st.markdown("""
-    **🧪 Traitement Biologique**
-    * **Bassin d'Aération (Bloc Long) :** Épuration par bactéries.
-    * **Clarificateur (Cylindre Large) :** Séparation eau/boues.
-    """)
-
-with leg_col3:
-    st.markdown("""
-    **⚡ Énergie & Résidus**
-    * **Digesteur (Tour) :** Production de biogaz.
-    * **HUB SCADA (Bloc Enterré) :** Pilotage électrique (Critique).
-    """)
-    with col_k:
-        st.subheader("📊 Diagnostic")
-        paralysie = (risk_val * 20) if alea != "Hors Crise" else 0
-        coût = risk_val * 3.5
+        # ZONE STRATÉGIE (DYNAMIQUE)
+        st.markdown(f"### 🛡️ Plan d'Adaptation : {cat_strat}")
+        desc_strat = strat_db[cat_strat][horiz_strat]
+        st.markdown(f"""<div class="strat-box">
+            <h4 style='margin-top:0; color:#00f2ff;'>{horiz_strat}</h4>
+            <p style='font-size:1.1em;'>{desc_strat}</p>
+        </div>""", unsafe_allow_html=True)
         
-        style = "status-ok" if paralysie == 0 else ("status-warn" if paralysie < 60 else "status-critical")
-        statut = "OPTIMAL" if paralysie == 0 else ("DÉGRADÉ" if paralysie < 60 else "CRITIQUE")
+        # LÉGENDE DES FORMES
+        st.markdown("---")
+        l1, l2, l3 = st.columns(3)
+        l1.markdown("<p class='legend-text'>🔷 <b>Cylindres Larges :</b> Décanteurs et Clarificateurs (Process Physique)</p>", unsafe_allow_html=True)
+        l2.markdown("<p class='legend-text'>🟩 <b>Blocs Longs :</b> Bassins d'Aération (Process Biologique)</p>", unsafe_allow_html=True)
+        l3.markdown("<p class='legend-text'>🟥 <b>Bloc Enterré :</b> HUB SCADA / Énergie (Point de Rupture)</p>", unsafe_allow_html=True)
 
+    with col_data:
+        st.subheader("📊 Diagnostic de Crise")
+        paralysie = (risk_val * 15) if alea != "Hors Crise" else 0
+        pertes = risk_val * 2.8
+        
+        statut = "OPTIMAL" if paralysie == 0 else ("CRITIQUE" if paralysie > 50 else "DÉGRADÉ")
+        color_stat = "#00ff64" if statut == "OPTIMAL" else ("#ffc800" if statut == "DÉGRADÉ" else "#ff3232")
+        
         st.markdown(f"""
         <div class="info-card">
-            <p style="opacity:0.7">ÉTAT DU SYSTÈME</p>
-            <h2 class="{style}">{statut}</h2>
+            <p style="opacity:0.7; margin:0;">ÉTIOLOGIE DU SYSTÈME</p>
+            <h2 style="color:{color_stat}; margin:0;" class="{'status-critical' if statut=='CRITIQUE' else ''}">{statut}</h2>
         </div>
         <div class="info-card">
-            <p style="opacity:0.7">PARALYSIE ESTIMÉE</p>
-            <span class="metric-value">{paralysie} Jours</span>
+            <p style="opacity:0.7; margin:0;">ARRÊT DE SERVICE</p>
+            <h2 style="margin:0;">{paralysie} Jours</h2>
         </div>
         <div class="info-card">
-            <p style="opacity:0.7">PERTES FINANCIÈRES</p>
-            <span class="metric-value" style="color:#ff3232;">-{coût:.1f} M€</span>
+            <p style="opacity:0.7; margin:0;">COÛT DES DOMMAGES</p>
+            <h2 style="color:#ff3232; margin:0;">-{pertes:.1f} M€</h2>
         </div>
         """, unsafe_allow_html=True)
+        
+        st.info(f"**Analyse :** À l'horizon {horizon}, le cumul de l'aléa et de la trajectoire RCP {rcp} engendre un stress hydraulique majeur sur le HUB SCADA situé en zone basse.")
 
 else:
-    st.header("ℹ️ Méthodologie et Calculs")
-    st.markdown("La résilience est calculée selon l'équation de risque de l'UNDRR :")
-    st.latex(r"Risque = \frac{Aléa \times Vulnérabilité}{Capacité\ d'Adaptation}")
-    
-    st.subheader("Modèle de Coûts et Délais")
+    st.header("ℹ️ Méthodologie du Jumeau Numérique")
     st.markdown("""
-    - **Dommages :** Basés sur les courbes de fragilité JRC.
-    - **Paralysie :** Temps cumulé de décontamination, séchage et mise en conformité électrique.
+    Cette simulation repose sur le croisement de trois jeux de données :
+    1. **Données GIEC (RCP) :** Modélisation de l'élévation du niveau des eaux et des épisodes de sécheresse.
+    2. **Courbes de Fragilité :** Chaque bâtiment possède un seuil de rupture (ex: immersion > 0.5m pour l'électronique).
+    3. **Indice de Résilience :** Calculé en fonction de la stratégie d'adaptation sélectionnée.
     """)
+    st.latex(r"Indice\ de\ Rupture = \frac{Intensité\ Aléa \times Vulnérabilité\ Bâti}{Efficacité\ Stratégie}")
+    
+    
     
     st.table({
-        "Niveau d'Aléa": ["Faible", "Modéré", "Sévère", "Extrême"],
-        "Paralysie (j)": ["5-15", "15-45", "45-90", "90-180"],
-        "Coût Moyen (M€)": ["0.5", "4.2", "12.5", "28.0"]
+        "Composant": ["Poste Électrique", "Clarificateurs", "Digesteurs", "Réseau Tuyauterie"],
+        "Sensibilité": ["Ultra-Haute", "Faible", "Moyenne", "Moyenne"],
+        "Seuil Critique (Eau)": ["-0.5 m", "+1.2 m", "+2.0 m", "+0.8 m"]
     })
