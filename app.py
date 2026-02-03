@@ -2,178 +2,145 @@ import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
 
-# --- 1. CONFIGURATION & STYLE ---
-st.set_page_config(layout="wide", page_title="Digital Twin Resilience Hub")
+# --- 1. CONFIGURATION ET STYLE NÉON ---
+st.set_page_config(layout="wide", page_title="Digital Twin Resilience X-Ray")
 
 st.markdown("""
 <style>
     .stApp { background-color: #050505; color: #00f2ff; }
-    section[data-testid="stSidebar"] { background-color: #111; border-right: 1px solid #00f2ff; }
-    .info-card { background: rgba(0, 30, 50, 0.8); border: 1px solid #00f2ff; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-    .metric-value { font-size: 2em; font-weight: bold; }
-    .status-alert { color: #ff3232; font-weight: bold; text-shadow: 0 0 10px #ff3232; animation: blinker 1.5s linear infinite; }
+    section[data-testid="stSidebar"] { background-color: #0d0d0d; border-right: 1px solid #00f2ff; }
+    .info-card { background: rgba(0, 20, 30, 0.9); border: 1px solid #00f2ff; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 0 15px rgba(0,242,255,0.1); }
+    .metric-value { font-size: 2.2em; font-weight: bold; color: #00f2ff; text-shadow: 0 0 10px #00f2ff; }
+    .status-critical { color: #ff3232; font-weight: bold; text-shadow: 0 0 10px #ff3232; animation: blinker 1.5s linear infinite; }
     @keyframes blinker { 50% { opacity: 0; } }
-    .strategy-text { font-size: 1em; color: #e0e0e0; border-left: 3px solid #00f2ff; padding-left: 15px; margin-top: 15px; line-height: 1.6; }
+    .strategy-box { border-left: 3px solid #00f2ff; padding-left: 15px; margin: 15px 0; font-size: 0.95em; line-height: 1.5; color: #d0d0d0; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. LOGIQUE DE NAVIGATION (SIDEBAR) ---
+# --- 2. LOGIQUE DE NAVIGATION ---
 with st.sidebar:
-    st.title("🕹️ HUB DE RÉSILIENCE")
-    mode = st.radio("Navigation", ["🖥️ Simulation 3D", "ℹ️ Méthodologie & Hypothèses"])
+    st.title("🛡️ HUB RESILIENCE")
+    tab = st.radio("Navigation", ["🖥️ Simulation 3D", "ℹ️ Méthodologie"])
     
     st.divider()
-    if mode == "🖥️ Simulation 3D":
-        st.subheader("1. Scénario Climatique")
-        alea = st.selectbox("Aléa Actif", ["Hors Crise", "Inondation Majeure", "Sécheresse Critique"])
+    if tab == "🖥️ Simulation 3D":
+        st.subheader("📡 Aléa & Horizon")
+        alea = st.selectbox("Type d'aléa", ["Hors Crise", "Inondation Majeure", "Sécheresse Critique"])
         rcp = st.select_slider("Scénario RCP", options=["2.6", "4.5", "8.5"], value="8.5")
-        horizon_clim = st.select_slider("Horizon Temporel", options=["Actuel", "2050", "2100"], value="2050")
+        horizon = st.select_slider("Horizon", options=["Actuel", "2050", "2100"], value="2050")
         
         st.divider()
-        st.subheader("2. Stratégies d'Adaptation")
+        st.subheader("🛠️ Stratégie d'Adaptation")
         cat_strat = st.selectbox("Catégorie", ["Physique", "Systémique", "Gouvernance", "R&D"])
-        horizon_strat = st.select_slider("Horizon de mise en œuvre", options=["< 5 ans", "5 ans", "10 ans", "20 ans"])
+        horiz_strat = st.select_slider("Mise en œuvre", options=["< 5 ans", "5 ans", "10 ans", "20 ans"])
         
-        # Calcul du score de risque (0-10)
-        risk_score = 0 if alea == "Hors Crise" else (3 if horizon_clim == "Actuel" else (6 if horizon_clim == "2050" else 8))
-        if rcp == "8.5" and alea != "Hors Crise": risk_score += 2
+        # Score de risque
+        risk_val = 0 if alea == "Hors Crise" else (3 if horizon == "Actuel" else (6 if horizon == "2050" else 9))
+        if rcp == "8.5" and alea != "Hors Crise": risk_val += 1
     else:
-        risk_score = 0
+        risk_val = 0
 
-# --- 3. BASE DE DONNÉES STRATÉGIES ---
+# --- 3. DONNÉES STRATÉGIES ---
 data_strat = {
-    "Physique": {
-        "< 5 ans": "Installation de **batardeaux amovibles** et vannes anti-retour sur les points bas du site.",
-        "5 ans": "Mise en œuvre d'une **surélévation sélective** (+1.5m) des transformateurs et pompes critiques.",
-        "10 ans": "Construction d'une **digue périmétrale** bétonnée avec double système de pompage d'exhaure.",
-        "20 ans": "Refonte des infrastructures en **bâtiments modulaires flottants** auto-étanches."
-    },
-    "Systémique": {
-        "< 5 ans": "Mise en place de **protocoles de délestage** et d'alimentation électrique redondante par groupe mobile.",
-        "5 ans": "Création d'un **bypass réseau** pour interconnexion d'urgence avec les régies d'eau voisines.",
-        "10 ans": "Autonomie totale via **Micro-Grid solaire** et stockage hydrogène pour 72h d'opération isolée.",
-        "20 ans": "Transition vers un **cycle fermé REUT**, réduisant la dépendance aux sources d'eau de surface vulnérables."
-    },
-    "Gouvernance": {
-        "< 5 ans": "Audit de vulnérabilité complet et **renégociation des polices d'assurance** climatiques.",
-        "5 ans": "Déploiement d'un **réseau IoT de capteurs de niveau** en amont avec IA d'alerte précoce.",
-        "10 ans": "Structuration d'une **cellule de crise territoriale** coordonnant les services de secours et l'industrie.",
-        "20 ans": "Planification de **relocalisation stratégique** des stocks de pièces détachées hors zone inondable."
-    },
-    "R&D": {
-        "< 5 ans": "Développement d'un **Jumeau Numérique prédictif** simulant les scénarios de crue par quartier.",
-        "5 ans": "Recherche sur des **matériaux polymères auto-cicatrisants** pour la tuyauterie enterrée.",
-        "10 ans": "Implémentation d'une **IA de maintenance prédictive** analysant la fatigue structurelle post-aléa.",
-        "20 ans": "Nouvelle génération de **bio-filtration thermorésistante** insensible aux vagues de chaleur."
-    }
+    "Physique": {"< 5 ans": "Batardeaux amovibles.", "5 ans": "Surélévation pompes.", "10 ans": "Digue béton.", "20 ans": "Unités flottantes."},
+    "Systémique": {"< 5 ans": "Protocoles délestage.", "5 ans": "Bypass réseau.", "10 ans": "Micro-grid solaire.", "20 ans": "Cycle REUT."},
+    "Gouvernance": {"< 5 ans": "Audit assurance.", "5 ans": "Alerte IoT.", "10 ans": "Cellule de crise.", "20 ans": "Standards résilience."},
+    "R&D": {"< 5 ans": "Jumeau numérique.", "5 ans": "Matériaux auto-cicatrisants.", "10 ans": "IA prédictive.", "20 ans": "Bio-filtration thermique."}
 }
 
-# --- 4. CONTENU : SIMULATION 3D ---
-if mode == "🖥️ Simulation 3D":
-    st.header(f"Digital Twin : Vue {'X-Ray Nominale' if alea == 'Hors Crise' else 'Analyse de Défaillance'}")
+# --- 4. FONCTIONS DE RENDU X-RAY ---
+def create_xray_structure(risk_score):
+    fig = go.Figure()
     
-    col_visu, col_kpi = st.columns([2.5, 1])
+    # Palette de couleurs dynamique
+    def get_color(vulnerabilite):
+        if alea == "Hors Crise": return "#00f2ff", "rgba(0, 242, 255, 0.1)"
+        total = vulnerabilite + risk_score
+        if total < 5: return "#00ff64", "rgba(0, 255, 100, 0.05)"
+        if total < 8: return "#ffc800", "rgba(255, 200, 0, 0.1)"
+        return "#ff3232", "rgba(255, 50, 50, 0.2)"
+
+    def draw_cube(x, y, z, dx, dy, dz, vulne, name):
+        color, fill = get_color(vulne)
+        # Faces semi-transparentes
+        fig.add_trace(go.Mesh3d(x=[x,x+dx,x+dx,x,x,x+dx,x+dx,x], y=[y,y,y+dy,y+dy,y,y,y+dy,y+dy], z=[z,z,z,z,z+dz,z+dz,z+dz,z+dz],
+                                i=[7,0,0,0,4,4,6,6,4,0,3,2], j=[3,4,1,2,5,6,5,2,0,1,6,3], k=[0,7,2,3,6,7,1,1,5,5,7,6],
+                                color=fill, opacity=0.5, showscale=False, hoverinfo='name', name=name))
+        # Arêtes (Wireframe)
+        edges_x, edges_y, edges_z = [], [], []
+        for s in [[0,1,2,3,0], [4,5,6,7,4], [0,4], [1,5], [2,6], [3,7]]:
+            for i in s:
+                edges_x.append([x,x+dx,x+dx,x,x,x+dx,x+dx,x][i]); edges_y.append([y,y,y+dy,y+dy,y,y,y+dy,y+dy][i]); edges_z.append([z,z,z,z,z+dz,z+dz,z+dz,z+dz][i])
+            edges_x.append(None); edges_y.append(None); edges_z.append(None)
+        fig.add_trace(go.Scatter3d(x=edges_x, y=edges_y, z=edges_z, mode='lines', line=dict(color=color, width=3), showlegend=False))
+
+    def draw_cyl(x, y, z, r, h, vulne, name):
+        color, fill = get_color(vulne)
+        theta = np.linspace(0, 2*np.pi, 32)
+        cx, cy = x+r, y+r
+        # Surface
+        fig.add_trace(go.Surface(x=np.outer(cx+r*np.cos(theta), np.ones(2)), y=np.outer(cy+r*np.sin(theta), np.ones(2)),
+                                 z=np.outer(np.ones(32), [z, z+h]), colorscale=[[0, fill], [1, fill]], showscale=False, opacity=0.3))
+        # Cercles haut/bas
+        fig.add_trace(go.Scatter3d(x=cx+r*np.cos(theta), y=cy+r*np.sin(theta), z=np.full(32, z+h), mode='lines', line=dict(color=color, width=3), showlegend=False))
+
+    # --- ARCHITECTURE DU SITE ---
+    draw_cyl(0, 0, 0, 1.2, 0.8, 2, "Clarificateur 1")
+    draw_cyl(3, 0, 0, 1.2, 0.8, 2, "Clarificateur 2")
+    draw_cyl(6, 0, 0, 1.2, 0.8, 3, "Clarificateur 3")
+    draw_cube(0, 3, 0, 2.5, 1.5, 1.5, 5, "Unité de Pompage")
+    draw_cube(3.5, 3.5, 0, 1, 1, 0.8, 1, "Centre de Contrôle")
+    draw_cube(5.5, 3, -0.8, 1.5, 1.5, 0.6, 7, "Sous-sol Électrique") # VULNÉRABLE
+    draw_cube(7.5, 3.5, 0, 0.8, 0.8, 2.5, 2, "Cheminée / Évent")
+
+    # ROUTES
+    fig.add_trace(go.Scatter3d(x=[-2, 10], y=[2.5, 2.5], z=[0,0], mode='lines', line=dict(color="rgba(100,100,100,0.4)", width=15), showlegend=False))
+    fig.add_trace(go.Scatter3d(x=[2.8, 2.8], y=[-2, 6], z=[0,0], mode='lines', line=dict(color="rgba(100,100,100,0.4)", width=15), showlegend=False))
     
-    with col_visu:
-        fig = go.Figure()
+    # TUYAUX NÉON
+    fig.add_trace(go.Scatter3d(x=[1.2, 1.2, 4.2, 4.2, 6], y=[1.2, 3, 3, 4, 4], z=[0.5, 0.5, 0.5, 0.5, 0.5], mode='lines', line=dict(color="#00f2ff", width=6), name="Réseau Principal"))
 
-        def get_status_color(vulne_base):
-            if alea == "Hors Crise": return "rgba(0, 242, 255, 0.2)", "#00f2ff"
-            total_impact = vulne_base + risk_score
-            if total_impact < 4: return "rgba(0, 255, 100, 0.3)", "#00ff64"
-            if total_impact < 7: return "rgba(255, 165, 0, 0.4)", "#ffa500"
-            return "rgba(255, 50, 50, 0.5)", "#ff3232"
+    fig.update_layout(scene=dict(xaxis_visible=False, yaxis_visible=False, zaxis_visible=False, 
+                      aspectmode='data', camera=dict(eye=dict(x=1.5, y=1.5, z=1))),
+                      paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0,r=0,b=0,t=0), height=600)
+    return fig
 
-        def add_structure(x, y, z, dx, dy, dz, vulne, name, is_cyl=False):
-            c_fill, c_line = get_status_color(vulne)
-            if is_cyl:
-                theta = np.linspace(0, 2*np.pi, 25)
-                r = dx/2
-                cx, cy = x+r, y+r
-                fig.add_trace(go.Surface(x=np.outer(cx+r*np.cos(theta), np.ones(2)), y=np.outer(cy+r*np.sin(theta), np.ones(2)),
-                    z=np.outer(np.ones(25), [z, z+dz]), colorscale=[[0, c_fill], [1, c_fill]], showscale=False, opacity=0.4))
-            else:
-                fig.add_trace(go.Mesh3d(x=[x,x+dx,x+dx,x,x,x+dx,x+dx,x], y=[y,y,y+dy,y+dy,y,y,y+dy,y+dy], z=[z,z,z,z,z+dz,z+dz,z+dz,z+dz],
-                    i=[7,0,0,0,4,4,6,6,4,0,3,2], j=[3,4,1,2,5,6,5,2,0,1,6,3], k=[0,7,2,3,6,7,1,1,5,5,7,6], color=c_fill, opacity=0.4))
-            # Wireframe
-            fig.add_trace(go.Scatter3d(x=[x,x+dx,x+dx,x,x], y=[y,y,y+dy,y+dy,y], z=[z+dz,z+dz,z+dz,z+dz,z+dz], mode='lines', line=dict(color=c_line, width=2), showlegend=False))
+# --- 5. AFFICHAGE PRINCIPAL ---
+if tab == "🖥️ Simulation 3D":
+    st.header(f"Digital Twin : Vue {'X-Ray' if alea == 'Hors Crise' else 'Alerte Système'}")
+    
+    col_v, col_k = st.columns([2.5, 1])
+    
+    with col_v:
+        st.plotly_chart(create_xray_structure(risk_val), use_container_width=True)
+        st.subheader(f"🛠️ Stratégie : {cat_strat} ({horiz_strat})")
+        st.markdown(f'<div class="strategy-box">{data_strat[cat_strat][horiz_strat]}</div>', unsafe_allow_html=True)
 
-        # --- DENSITÉ INDUSTRIELLE ---
-        # Bassins (Cylindres)
-        add_structure(0, 0, 0, 1.8, 1.8, 0.8, 2, "Cylindre A", True)
-        add_structure(2.5, 0, 0, 1.8, 1.8, 0.8, 2, "Cylindre B", True)
-        add_structure(5, 0, 0, 1.8, 1.8, 0.8, 3, "Cylindre C", True)
-        # Bâtiments (Rectangles)
-        add_structure(0, 2.5, 0, 1.5, 1, 1.2, 5, "Pompage Centrale")
-        add_structure(2, 2.5, 0, 1, 1, 0.7, 1, "Contrôle")
-        add_structure(3.5, 2.5, 0, 0.8, 0.8, 0.5, 2, "Logistique")
-        add_structure(5, 2.5, -0.7, 1.5, 1.2, 0.6, 6, "Sous-sol Elec") # Sous-sol
-        # Routes cuadrillées
-        fig.add_trace(go.Scatter3d(x=[-2, 8], y=[2.2, 2.2], z=[0, 0], mode='lines', line=dict(color="rgba(100,100,100,0.5)", width=12), name="Route A"))
-        fig.add_trace(go.Scatter3d(x=[2.2, 2.2], y=[-1, 5], z=[0, 0], mode='lines', line=dict(color="rgba(100,100,100,0.5)", width=12), name="Route B"))
-        # Tuyauterie
-        fig.add_trace(go.Scatter3d(x=[0.9, 0.9, 3.4, 3.4, 5.9, 5.9], y=[0.9, 2.5, 2.5, 0.9, 0.9, 2.5], z=[0.4, 0.4, 0.4, 0.4, 0.4, 0.4], mode='lines', line=dict(color="#00f2ff", width=6)))
-
-        fig.update_layout(scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False)),
-                          paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0,r=0,b=0,t=0), height=650)
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.subheader(f"🛠️ Détail : {cat_strat} ({horizon_strat})")
-        st.markdown(f'<div class="strategy-text">{data_strat[cat_strat][horizon_strat]}</div>', unsafe_allow_html=True)
-
-    with col_kpi:
-        st.subheader("📊 ANALYSE D'IMPACT")
-        
-        # Logique Out of Service
-        is_out = risk_score >= 8
-        status_label = "⚠️ OUT OF SERVICE" if is_out else ("🔶 OPÉRATION DÉGRADÉE" if risk_score >= 5 else "✅ NOMINAL")
-        status_css = "status-alert" if is_out else ""
-        
-        # Temps de paralysie
-        paralysie = 0 if risk_score < 3 else (15 if risk_score < 6 else (45 if risk_score < 8 else 180))
-        
+    with col_k:
+        st.subheader("📊 ANALYSE")
+        is_out = risk_val > 7
         st.markdown(f"""
         <div class="info-card">
-            <p style="opacity:0.8">STATUT DU SITE</p>
-            <h2 class="{status_css}">{status_label}</h2>
-            <p style="font-size:0.8em; margin-top:10px;">{'Seuil critique de rupture atteint' if is_out else 'Infrastructures sous surveillance'}</p>
-        </div>
-        
-        <div class="info-card">
-            <p style="opacity:0.8">TEMPS DE PARALYSIE</p>
-            <h2 style="color:#00f2ff;">{paralysie} Jours</h2>
-            <progress value="{risk_score*10}" max="100" style="width:100%"></progress>
-        </div>
-
-        <div class="info-card">
-            <p style="opacity:0.8">DÉGÂTS FINANCIERS</p>
-            <span class="metric-value" style="color:#ff3232;">-{risk_score * 3.5:.1f} M€</span>
+            <p style="opacity:0.7">STATUT INFRASTRUCTURE</p>
+            <h2 class="{'status-critical' if is_out else ''}">{'⚠️ OUT OF SERVICE' if is_out else '✅ NOMINAL'}</h2>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Temps de paralysie
+        days = 0 if risk_val < 3 else (20 if risk_val < 6 else (60 if risk_val < 8 else 180))
+        st.markdown(f"""
+        <div class="info-card">
+            <p style="opacity:0.7">PARALYSIE ESTIMÉE</p>
+            <span class="metric-value">{days} Jours</span>
+            <div style="background:#222; height:10px; border-radius:5px; margin-top:10px;">
+                <div style="width:{min(risk_val*10, 100)}%; background:#00f2ff; height:10px; border-radius:5px;"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.table({"Intensité": ["Faible", "Moyenne", "Critique"], "Arrêt": ["0j", "20j", "180j"], "Coût": ["<1M", "8M", ">20M"]})
 
-        st.write("**Récapitulatif de Paralysie :**")
-        st.table({
-            "Intensité": ["Faible", "Modérée", "Majeure", "Critique"],
-            "Arrêt (Jours)": ["0", "15", "45", "180"],
-            "Coût direct": ["0", "5 M€", "15 M€", "35 M€"]
-        })
-
-# --- 5. MÉTHODOLOGIE ---
 else:
-    st.header("ℹ️ Méthodologie & Hypothèses de Risque")
-    st.latex(r"Impact = \int_{0}^{T} (V_{i} \times \alpha_{rcp} \times \beta_{horizon}) dt")
-    
-    
-    
-    st.markdown("""
-    ### Justification des Calculs :
-    1. **Seuil 'Out of Service' :** Déclenché automatiquement par une submersion simulée > 0.5m sur les unités de pompage centrales ou une rupture de l'unité 'Sous-sol Elec'.
-    2. **Temps de Paralysie :** - **15 jours :** Nettoyage, expertise et remise sous tension.
-        - **45 jours :** Remplacement des composants électroniques standards.
-        - **180 jours :** Reconstruction lourde du génie civil et remplacement de pompes sur-mesure (délais d'approvisionnement critiques).
-    3. **Réduction de Risque :** Les stratégies sélectionnées appliquent un coefficient réducteur de 20% à 50% sur les coûts finaux (non affiché visuellement dans cette démo).
-    """)
-    
-    
-    
-    st.info("💡 Modèle calibré sur les données historiques de résilience des agences de l'eau et les scénarios GIEC 2026.")
+    st.header("ℹ️ Méthodologie")
+    st.latex(r"R = P \times V \times E")
+    st.markdown("Estimation basée sur les courbes de fragilité des infrastructures critiques (Source OCDE).")
